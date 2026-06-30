@@ -17,7 +17,7 @@ const COLOR_MAP = {
 
 interface Metric {
     name: string;
-    unit: string;
+    unit: string | null;
     history: Array<{ year: number; value: number }>;
 }
 
@@ -93,8 +93,11 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
 
         const employmentPass = Math.round((employmentPassPct / 100) * nonResidents);
         const sPassHolders = Math.round((sPassHoldersPct / 100) * nonResidents);
+        const passCount = employmentPass + sPassHolders;
+
         const workPermits = Math.round((workPermitsPct / 100) * nonResidents);
         const migrantWorkers = Math.round((migrantWorkersPct / 100) * nonResidents);
+
         const dependantPass = Math.round((dependantPassPct / 100) * nonResidents);
         const studentPass = Math.round((studentPassPct / 100) * nonResidents);
         const others = studentPass + dependantPass;
@@ -117,6 +120,7 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
             migrantWorkers,
             dependantPass,
             studentPass,
+            passCount,
             others,
             employmentPassPct,
             sPassHoldersPct,
@@ -224,9 +228,11 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                         <PopulationPieChart
                             totalPopulation={pieChartData.total}
                             citizenCount={pieChartData.citizens}
-                            nonCitizenCount={pieChartData.nonCitizens}
-                        // prCount={pieChartData.permanentResidents}
-                        // nonResidentCount={pieChartData.nonResidents}
+                            prCount={pieChartData.permanentResidents}
+                            workPermitCount={pieChartData.workPermits}
+                            passCount={pieChartData.passCount}
+                            migrantCount={pieChartData.migrantWorkers}
+                            otherNonCitizenCount={pieChartData.others}
                         />
                     ) : (
                         <div className="w-full h-full min-h-[520px] overflow-hidden">
@@ -307,24 +313,20 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                                     {isNonResidentExpanded && (
                                         <div className="pl-4 space-y-1">
                                             <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
-                                                <span className="text-slate-600 font-medium">Employment Pass Holders</span>
-                                                <div className="text-right">
-                                                    <span className="font-mono font-bold text-slate-800">{pieChartData.employmentPass.toLocaleString()}</span>
-                                                    {/* <span className="font-mono font-bold text-slate-800">({pieChartData.employmentPassPct.toLocaleString()}%)</span> */}
-                                                </div>
-
-                                            </div>
-                                            <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
-                                                <span className="text-slate-600 font-medium">S Pass Holders</span>
-                                                <span className="font-mono font-bold text-slate-800">{pieChartData.sPassHolders.toLocaleString()}</span>
-                                            </div>
-                                            <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
-                                                <span className="text-slate-600 font-medium">Work Permits Holders</span>
+                                                <span className="text-slate-600 font-medium">Work Permit Holders</span>
                                                 <span className="font-mono font-bold text-slate-800">{pieChartData.workPermits.toLocaleString()}</span>
                                             </div>
                                             <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
                                                 <span className="text-slate-600 font-medium">Migrant Domestic Workers Permits</span>
                                                 <span className="font-mono font-bold text-slate-800">{pieChartData.migrantWorkers.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
+                                                <span className="text-slate-600 font-medium">Employment and S-Pass Holders</span>
+                                                <div className="text-right">
+                                                    <span className="font-mono font-bold text-slate-800">{pieChartData.passCount.toLocaleString()}</span>
+                                                    {/* <span className="font-mono font-bold text-slate-800">({pieChartData.employmentPassPct.toLocaleString()}%)</span> */}
+                                                </div>
+
                                             </div>
                                             <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
                                                 <span className="text-slate-600 font-medium">Long-Term, Dependants and Students</span>

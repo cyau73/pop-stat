@@ -8,6 +8,14 @@ const TABLE_MAP: Record<string, string> = {
     'breakdown': 'M810791',
 };
 
+type PrismaWriteOp = ReturnType<typeof prisma.dataPoint.create> | ReturnType<typeof prisma.dataPoint.upsert>;
+
+interface DataPoint {
+    key: string;
+    value: string | number;
+    // Add other fields if they exist, e.g., year, category, etc.
+}
+
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'total';
@@ -55,8 +63,8 @@ export async function GET(request: Request) {
                 },
             });
 
-            const dpOperations = (row.columns || []).map(dp => {
-                const value = parseFloat(dp.value);
+            const dpOperations = (row.columns || []).map((dp: DataPoint) => {
+                const value = parseFloat(String(dp.value));
                 if (isNaN(value)) return null;
 
                 return prisma.dataPoint.upsert({
@@ -75,7 +83,7 @@ export async function GET(request: Request) {
                         value,
                     },
                 });
-            }).filter((op): op is NonNullable<typeof op> => op !== null);
+            }).filter((op: any): op is NonNullable<typeof op> => op !== null);
 
             if (dpOperations.length > 0) {
                 await prisma.$transaction(dpOperations);

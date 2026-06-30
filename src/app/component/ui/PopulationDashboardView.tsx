@@ -7,10 +7,16 @@ interface DataPoint {
     value: number | null;
 }
 
+interface Metric {
+    name: string;
+    unit: string;
+    history: Array<{ year: number; value: number }>;
+}
+
 interface IndicatorWithData {
     id: string;
     name: string;
-    unit: string;
+    unit: string | null;
     dataPoints: DataPoint[];
 }
 
@@ -78,9 +84,15 @@ export default function PopulationDashboardView({ data, breakdown }: PopulationD
                     rawMetrics={widgetData}
                     breakdownMetrics={breakdown.map(ind => ({
                         name: ind.name,
-                        history: ind.dataPoints.map(dp => ({ year: parseInt(dp.timePeriod), value: dp.value ?? 0 }))
+                        unit: ind.unit ?? 'percentage' as string,
+                        history: ind.dataPoints.map((dp: DataPoint) => ({
+                            year: parseInt(dp.timePeriod),
+                            // Use ?? 0 to convert null/undefined to 0 before parseFloat
+                            value: parseFloat((dp.value ?? 0).toString())
+                        }))
                     }))}
                 />
+
             </section>
 
             {/* Main Snapshot Table */}
@@ -104,7 +116,7 @@ export default function PopulationDashboardView({ data, breakdown }: PopulationD
                                         {row.name}
                                     </td>
                                     <td className="p-4 text-muted-foreground">
-                                        {row.unit}
+                                        {row.unit ?? 'N/A'}
                                     </td>
                                     {TARGET_YEARS.map((year, idx) => (
                                         <td

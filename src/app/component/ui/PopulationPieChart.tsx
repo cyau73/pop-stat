@@ -12,29 +12,36 @@ interface Segment {
 interface PopulationPieChartProps {
     totalPopulation: number;
     citizenCount: number;
-    // prCount: number;
-    // nonResidentCount: number;
-    nonCitizenCount: number;
+    prCount: number
+    // Sub-segments of Non-Citizens
+    workPermitCount: number;
+    passCount: number;
+    migrantCount: number;
+    otherNonCitizenCount: number;
 }
 
 export default function PopulationPieChart({
     totalPopulation,
     citizenCount,
-    nonCitizenCount,
     prCount,
-    nonResidentCount,
+    workPermitCount,
+    passCount,
+    migrantCount,
+    otherNonCitizenCount,
 }: PopulationPieChartProps) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
     const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
 
-    // Organize segments dynamically based on input parameters
     const segments: Segment[] = useMemo(() => [
-        { label: 'Singapore Citizens', value: citizenCount, color: '#059669' }, // Emerald
-        { label: 'Non-Citizens', value: nonCitizenCount, color: '#3b82f6' }, // Blue
-        //        { label: 'Permanent Residents (PR)', value: prCount, color: '#3b82f6' }, // Blue
-        //        { label: 'Non-Residents', value: nonResidentCount, color: '#f59e0b' },   // Amber
-    ], [citizenCount, prCount, nonResidentCount]);
+        { label: 'Singapore Citizens', value: citizenCount, color: '#059669' }, // Green
+        // Non-Citizens: Ranging from lighter (general) to darker (specific) blues
+        { label: 'Permanent Residents', value: prCount, color: '#60a5fa' },      // Bright Blue
+        { label: 'Work Permits', value: workPermitCount, color: '#3b82f6' },     // Primary Blue
+        { label: 'Employment & S Pass', value: passCount, color: '#2563eb' },    // Darker Blue
+        { label: 'Domestic Workers', value: migrantCount, color: '#1d4ed8' },    // Even Darker
+        { label: 'Other Non-Citizens', value: otherNonCitizenCount, color: '#1e3a8a' } // Deep Navy
+    ], [citizenCount, prCount, workPermitCount, passCount, migrantCount, otherNonCitizenCount]);
 
     // Compute angular slices mapping totals to cumulative radians
     const chartData = useMemo(() => {
