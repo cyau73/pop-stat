@@ -12,13 +12,15 @@ interface Segment {
 interface PopulationPieChartProps {
     totalPopulation: number;
     citizenCount: number;
-    prCount: number;
-    nonResidentCount: number;
+    // prCount: number;
+    // nonResidentCount: number;
+    nonCitizenCount: number;
 }
 
 export default function PopulationPieChart({
     totalPopulation,
     citizenCount,
+    nonCitizenCount,
     prCount,
     nonResidentCount,
 }: PopulationPieChartProps) {
@@ -29,8 +31,9 @@ export default function PopulationPieChart({
     // Organize segments dynamically based on input parameters
     const segments: Segment[] = useMemo(() => [
         { label: 'Singapore Citizens', value: citizenCount, color: '#059669' }, // Emerald
-        { label: 'Permanent Residents (PR)', value: prCount, color: '#3b82f6' }, // Blue
-        { label: 'Non-Residents', value: nonResidentCount, color: '#f59e0b' },   // Amber
+        { label: 'Non-Citizens', value: nonCitizenCount, color: '#3b82f6' }, // Blue
+        //        { label: 'Permanent Residents (PR)', value: prCount, color: '#3b82f6' }, // Blue
+        //        { label: 'Non-Residents', value: nonResidentCount, color: '#f59e0b' },   // Amber
     ], [citizenCount, prCount, nonResidentCount]);
 
     // Compute angular slices mapping totals to cumulative radians

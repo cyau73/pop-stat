@@ -5,6 +5,16 @@ import React, { useState, useMemo } from 'react';
 import { GenerateWidget } from './generate-widget';
 import PopulationPieChart from './PopulationPieChart';
 
+const COLOR_MAP = {
+    citizens: 'bg-emerald-500',
+    nonCitizens: 'bg-blue-500',
+    workPermits: 'bg-amber-500',
+    employmentPass: 'bg-amber-400',
+    sPassHolders: 'bg-amber-300',
+    migrantWorkers: 'bg-amber-200',
+    others: 'bg-amber-100',
+};
+
 interface Metric {
     name: string;
     unit: string;
@@ -23,6 +33,7 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
     const [yearScope, setYearScope] = useState<number>(10);
 
     // Toggle state tracking the breakdown of non-resident sub-categories
+    const [isNonCitizenExpanded, setIsNonCitizenExpanded] = useState<boolean>(false);
     const [isNonResidentExpanded, setIsNonResidentExpanded] = useState<boolean>(false);
 
     const maxAvailableYears = rawMetrics[0]?.history?.length || 20;
@@ -69,6 +80,7 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
         const citizens = getValueFromMetrics(rawMetrics, ['citizen'], finalSnapshotYear);
         const permanentResidents = getValueFromMetrics(rawMetrics, ['permanent resident'], finalSnapshotYear) || getValueFromMetrics(rawMetrics, ['pr'], finalSnapshotYear);
         const nonResidents = getValueFromMetrics(rawMetrics, ['non-resident'], finalSnapshotYear);
+        const nonCitizens = permanentResidents + nonResidents;
 
         // Fetch break-down groups for granular legend distribution mapping
         const employmentPassPct = getValueFromMetrics(breakdownMetrics, ['employment pass'], finalSnapshotYear);
@@ -96,6 +108,7 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
 
         return {
             citizens,
+            nonCitizens,
             permanentResidents,
             nonResidents,
             employmentPass,
@@ -211,8 +224,9 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                         <PopulationPieChart
                             totalPopulation={pieChartData.total}
                             citizenCount={pieChartData.citizens}
-                            prCount={pieChartData.permanentResidents}
-                            nonResidentCount={pieChartData.nonResidents}
+                            nonCitizenCount={pieChartData.nonCitizens}
+                        // prCount={pieChartData.permanentResidents}
+                        // nonResidentCount={pieChartData.nonResidents}
                         />
                     ) : (
                         <div className="w-full h-full min-h-[520px] overflow-hidden">
@@ -231,7 +245,7 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                         {/* Singapore Citizens Row */}
                         <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border">
                             <div className="flex items-center space-x-2.5">
-                                <div className="w-3 h-3 rounded-full bg-blue-600 shrink-0" />
+                                <div className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP.citizens} shrink-0`} />
                                 <span className="font-medium text-slate-700">Singapore Citizens</span>
                             </div>
                             <div className="text-right">
@@ -240,100 +254,89 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                             </div>
                         </div>
 
-                        {/* Permanent Residents Row */}
-                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border">
-                            <div className="flex items-center space-x-2.5">
-                                <div className="w-3 h-3 rounded-full bg-emerald-500 shrink-0" />
-                                <span className="font-medium text-slate-700">Permanent Residents</span>
+                        {/* 1. Non-Citizens Accordion (Top Level) */}
+                        <div className="space-y-2 font-sans text-sm">
+                            <div
+                                onClick={() => setIsNonCitizenExpanded(!isNonCitizenExpanded)}
+                                className="flex items-center justify-between p-2.5 rounded-lg bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-all"
+                            >
+                                <div className="flex items-center space-x-2.5">
+                                    <svg className={`w-3 h-3 text-indigo-600 transition-transform ${isNonCitizenExpanded ? 'rotate-90' : 'rotate-0'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                    </svg>
+                                    <div className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP.nonCitizens} shrink-0`} />
+                                    <span className="font-semibold text-indigo-900">Non-Citizens Total</span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="block font-bold text-indigo-900">{pieChartData.nonCitizens.toLocaleString()}</span>
+                                    <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.nonCitizens)}</span>
+                                </div>
                             </div>
-                            <div className="text-right">
-                                <span className="block font-bold text-slate-900">{pieChartData.permanentResidents.toLocaleString()}</span>
-                                <span className="text-xs text-muted-foreground font-medium">{getPercentage(pieChartData.permanentResidents)}</span>
-                            </div>
+
+                            {/* 2. Nested Non-Citizen Content */}
+                            {isNonCitizenExpanded && (
+                                <div className="pl-6 space-y-2 animate-fadeIn border-l-2 border-indigo-100 ml-4">
+
+                                    {/* Permanent Residents Row */}
+                                    <div className="flex items-center justify-between p-2 rounded-md bg-indigo-500/5 text-xs">
+                                        <span className="font-medium text-slate-700">Permanent Residents</span>
+                                        <div className="text-right">
+                                            <span className="font-mono font-bold">{pieChartData.permanentResidents.toLocaleString()}</span><br />
+                                            <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.permanentResidents)}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* 3. Non-Resident Sub-types (Second Level) */}
+                                    <div
+                                        onClick={() => setIsNonResidentExpanded(!isNonResidentExpanded)}
+                                        className="flex items-center justify-between p-2 rounded-md bg-amber-500/10 cursor-pointer text-xs font-semibold text-amber-900 hover:bg-amber-500/20"
+                                    >
+                                        <div className="flex items-center space-x-2">
+                                            <svg className={`w-2.5 h-2.5 transition-transform ${isNonResidentExpanded ? 'rotate-90' : 'rotate-0'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                            </svg>
+                                            <span>Non-Resident Sub-types</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span>{pieChartData.nonResidents.toLocaleString()}</span><br />
+                                            <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.nonResidents)}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Nested Breakdown Items */}
+                                    {isNonResidentExpanded && (
+                                        <div className="pl-4 space-y-1">
+                                            <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
+                                                <span className="text-slate-600 font-medium">Employment Pass Holders</span>
+                                                <div className="text-right">
+                                                    <span className="font-mono font-bold text-slate-800">{pieChartData.employmentPass.toLocaleString()}</span>
+                                                    {/* <span className="font-mono font-bold text-slate-800">({pieChartData.employmentPassPct.toLocaleString()}%)</span> */}
+                                                </div>
+
+                                            </div>
+                                            <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
+                                                <span className="text-slate-600 font-medium">S Pass Holders</span>
+                                                <span className="font-mono font-bold text-slate-800">{pieChartData.sPassHolders.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
+                                                <span className="text-slate-600 font-medium">Work Permits Holders</span>
+                                                <span className="font-mono font-bold text-slate-800">{pieChartData.workPermits.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
+                                                <span className="text-slate-600 font-medium">Migrant Domestic Workers Permits</span>
+                                                <span className="font-mono font-bold text-slate-800">{pieChartData.migrantWorkers.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
+                                                <span className="text-slate-600 font-medium">Long-Term, Dependants and Students</span>
+                                                <span className="font-mono font-bold text-slate-800">{pieChartData.others.toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
-
-                        {/* Aggregated Non-Residents Accordion Trigger Row */}
-                        <div
-                            onClick={() => setIsNonResidentExpanded(!isNonResidentExpanded)}
-                            className="flex items-center justify-between p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-all select-none"
-                        >
-                            <div className="flex items-center space-x-2.5">
-                                {/* Triangle Arrow Icon */}
-                                <svg
-                                    className={`w-3 h-3 text-amber-600 transition-transform duration-200 ${isNonResidentExpanded ? 'rotate-90' : 'rotate-0'
-                                        }`}
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    strokeWidth={3}
-                                >
-                                    {/* This path creates a simple chevron pointing right */}
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                </svg>
-                                <div className="w-3 h-3 rounded-full bg-amber-500 shrink-0" />
-                                <span className="font-semibold text-amber-900">Non-Residents Total</span>
-                            </div>
-                            <div className="text-right">
-                                <span className="block font-bold text-amber-900">{pieChartData.nonResidents.toLocaleString()}</span>
-                                <span className="text-xs text-amber-700 font-bold">{getPercentage(pieChartData.nonResidents)}</span>
-                            </div>
-                        </div>
-
-                        {/* Dropdown Separated Sub-groups using matching shades (Opacity Tracks) */}
-                        {isNonResidentExpanded && (
-                            <div className="pl-6 space-y-1.5 pt-1 border-l-2 border-dashed border-amber-200 ml-4 animate-fadeIn">
-                                {/* Work Permit Holders */}
-                                <div className="flex items-center justify-between p-2 rounded-md bg-amber-500/5 text-xs">
-                                    <div className="flex items-center space-x-2">
-                                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80 shrink-0" />
-                                        <span className="text-slate-600 font-medium">Work Permit Holders</span>
-                                    </div>
-                                    <span className="font-mono font-bold text-slate-800">{pieChartData.workPermits.toLocaleString()} ({pieChartData.workPermitsPct.toLocaleString()}%)</span>
-                                </div>
-
-                                {/* Employment Pass Holders */}
-                                <div className="flex items-center justify-between p-2 rounded-md bg-amber-500/5 text-xs">
-                                    <div className="flex items-center space-x-2">
-                                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500/60 shrink-0" />
-                                        <span className="text-slate-600 font-medium">Employment Pass</span>
-                                    </div>
-                                    <span className="font-mono font-bold text-slate-800">{pieChartData.employmentPass.toLocaleString()} ({pieChartData.employmentPassPct.toLocaleString()}%)</span>
-                                </div>
-                                { /*  S Pass Holder */}
-                                <div className="flex items-center justify-between p-2 rounded-md bg-amber-500/5 text-xs">
-                                    <div className="flex items-center space-x-2">
-                                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500/40 shrink-0" />
-                                        <span className="text-slate-600 font-medium">S Pass Holders</span>
-                                    </div>
-                                    <span className="font-mono font-bold text-slate-800">{pieChartData.sPassHolders.toLocaleString()} ({pieChartData.sPassHoldersPct.toLocaleString()}%)</span>
-                                </div>
-                                { /*  Migrant Workers */}
-                                <div className="flex items-center justify-between p-2 rounded-md bg-amber-500/5 text-xs">
-                                    <div className="flex items-center space-x-2">
-                                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500/40 shrink-0" />
-                                        <span className="text-slate-600 font-medium">Migrant Workers</span>
-                                    </div>
-                                    <span className="font-mono font-bold text-slate-800">{pieChartData.migrantWorkers.toLocaleString()} ({pieChartData.migrantWorkersPct.toLocaleString()}%)</span>
-                                </div>
-                                {/* Other Passes (Students/Dependants) */}
-                                <div className="flex items-center justify-between p-2 rounded-md bg-amber-500/5 text-xs">
-                                    <div className="flex items-center space-x-2">
-                                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500/40 shrink-0" />
-                                        <span className="text-slate-600 font-medium">Students & Dependants</span>
-                                    </div>
-                                    <span className="font-mono font-bold text-slate-800">{pieChartData.others.toLocaleString()}({pieChartData.othersPct.toLocaleString()}%)</span>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Macro Summary Readout */}
-                    <div className="pt-3 border-t flex justify-between items-center text-xs text-muted-foreground font-mono">
-                        <span>Total Tracked Pool:</span>
-                        <span className="font-bold text-slate-900 text-sm">{pieChartData.total.toLocaleString()}</span>
                     </div>
                 </div>
-
             </div>
         </div>
     );
