@@ -1,0 +1,293 @@
+// src/app/component/ui/PopulationExplorer.tsx
+'use client';
+
+import React, { useState, useMemo } from 'react';
+import { GenerateWidget } from './generate-widget';
+import PopulationPieChart from './PopulationPieChart';
+
+interface PopulationExplorerProps {
+    rawMetrics: Array<{
+        name: string;
+        unit: string;
+        history: Array<{ year: number; value: number }>;
+    }>;
+}
+
+type ViewMode = 'line' | 'bar' | 'pie';
+
+export default function PopulationExplorer({ rawMetrics }: PopulationExplorerProps) {
+    const [viewMode, setViewMode] = useState<ViewMode>('pie');
+    const [yearScope, setYearScope] = useState<number>(10);
+
+    // Toggle state tracking the breakdown of non-resident sub-categories
+    const [isNonResidentExpanded, setIsNonResidentExpanded] = useState<boolean>(false);
+
+    const maxAvailableYears = rawMetrics[0]?.history?.length || 20;
+
+    const filteredMetrics = rawMetrics.map(metric => ({
+        ...metric,
+        history: metric.history.slice(-yearScope)
+    }));
+
+    const spec = {
+        widgetSpec: {
+            height: "600px",
+            prompt: `**Objective:** Render chart data.\n **View Type:** ${viewMode}.\n **Data State:** Render context parsed dynamically: ${JSON.stringify(filteredMetrics)}.`
+        }
+    };
+
+    // Extracts the exact dynamically calculated snapshot year for the Pie Chart
+    const pieChartData = useMemo(() => {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+
+        const calculatedTargetYear = currentMonth >= 5 ? currentYear - 1 : currentYear - 2;
+
+        let finalSnapshotYear = calculatedTargetYear;
+
+        if (rawMetrics.length > 0 && rawMetrics[0].history.length > 0) {
+            const hasTargetYear = rawMetrics[0].history.some(h => h.year === calculatedTargetYear);
+            if (!hasTargetYear) {
+                finalSnapshotYear = rawMetrics[0].history[rawMetrics[0].history.length - 1].year;
+            }
+        }
+
+        const getValueForYear = (keywords: string[], targetYear: number): number => {
+            const target = rawMetrics.find(metric =>
+                keywords.every(kw => metric.name.toLowerCase().includes(kw.toLowerCase()))
+            );
+            if (!target) return 0;
+
+            const yearRecord = target.history.find(h => h.year === targetYear);
+            return yearRecord ? yearRecord.value : 0;
+        };
+
+        const citizens = getValueForYear(['citizen'], finalSnapshotYear);
+        const permanentResidents = getValueForYear(['permanent resident'], finalSnapshotYear) || getValueForYear(['pr'], finalSnapshotYear);
+
+        // Fetch break-down groups for granular legend distribution mapping
+        const workPermits = getValueForYear(['work permit'], finalSnapshotYear);
+        const employmentPass = getValueForYear(['employment pass'], finalSnapshotYear);
+        const others = getValueForYear(['student'], finalSnapshotYear) + getValueForYear(['dependant'], finalSnapshotYear);
+
+        let nonResidents = getValueForYear(['non-resident'], finalSnapshotYear);
+        if (nonResidents === 0) {
+            nonResidents = workPermits + employmentPass + others;
+        }
+
+        const total = citizens + permanentResidents + nonResidents;
+
+        return {
+            citizens,
+            permanentResidents,
+            nonResidents,
+            workPermits,
+            employmentPass,
+            others,
+            total,
+            snapshotYear: finalSnapshotYear
+        };
+    }, [rawMetrics]);
+
+    const presets = [5, 10, 15, 20];
+
+    // Helper functions for percentages
+    const getPercentage = (value: number) => {
+        if (!pieChartData.total) return '0.0%';
+        return `${((value / pieChartData.total) * 100).toFixed(1)}%`;
+    };
+
+    return (
+        <div className="w-full space-y-6">
+            {/* Toolbar Panel */}
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 bg-muted/20 p-4 rounded-xl border">
+
+                {/* View Selector Tabs */}
+                <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0">
+                    {(['line', 'bar', 'pie'] as ViewMode[]).map((mode) => (
+                        <button
+                            key={mode}
+                            onClick={() => setViewMode(mode)}
+                            className={`px-4 py-1.5 text-xs font-semibold capitalize rounded-md transition-all ${viewMode === mode
+                                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                        >
+                            {mode} Chart
+                        </button>
+                    ))}
+                </div>
+
+                {/* Context Controls Switch */}
+                {viewMode !== 'pie' ? (
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-white p-3 px-4 rounded-lg border shadow-xs w-full lg:w-auto md:min-w-[480px]">
+                        <div className="flex flex-col shrink-0 min-w-[100px]">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Timeline Window</span>
+                            <span className="text-xs font-mono font-bold text-emerald-600">
+                                {yearScope === maxAvailableYears ? 'Full History' : `Last ${yearScope} Years`}
+                            </span>
+                        </div>
+
+                        <div className="flex flex-col flex-grow space-y-2 w-full">
+                            <div className="flex items-center gap-1.5">
+                                {presets.map((preset) => (
+                                    <button
+                                        key={preset}
+                                        type="button"
+                                        disabled={preset > maxAvailableYears}
+                                        onClick={() => setYearScope(preset)}
+                                        className={`px-2 py-0.5 text-[11px] font-mono font-semibold rounded border transition-all ${yearScope === preset
+                                                ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
+                                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                            } disabled:opacity-40 disabled:pointer-events-none`}
+                                    >
+                                        {preset}y
+                                    </button>
+                                ))}
+                                <button
+                                    type="button"
+                                    disabled={yearScope === maxAvailableYears}
+                                    onClick={() => setYearScope(maxAvailableYears)}
+                                    className={`px-2 py-0.5 text-[11px] font-mono font-semibold rounded border transition-all ${yearScope === maxAvailableYears
+                                            ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
+                                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                        } disabled:opacity-40`}
+                                >
+                                    ++
+                                </button>
+                            </div>
+
+                            <input
+                                type="range"
+                                min={3}
+                                max={maxAvailableYears}
+                                value={yearScope}
+                                onChange={(e) => setYearScope(Number(e.target.value))}
+                                className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
+                            />
+                        </div>
+                    </div>
+                ) : (
+                    <div className="text-xs font-medium text-muted-foreground bg-white px-3 py-1.5 rounded-lg border shadow-xs">
+                        Snapshot Year: <span className="font-mono font-bold text-emerald-600">{pieChartData.snapshotYear}</span>
+                    </div>
+                )}
+            </div>
+
+            {/* View Grid Layout Section */}
+            <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+
+                {/* Main Graph Window Pane */}
+                <div className="lg:col-span-2 border rounded-xl bg-card overflow-hidden shadow-sm min-h-[520px] flex items-center justify-center">
+                    {viewMode === 'pie' ? (
+                        <PopulationPieChart
+                            totalPopulation={pieChartData.total}
+                            citizenCount={pieChartData.citizens}
+                            prCount={pieChartData.permanentResidents}
+                            nonResidentCount={pieChartData.nonResidents}
+                        />
+                    ) : (
+                        <div className="w-full h-full min-h-[520px]">
+                            <GenerateWidget key={viewMode} height="520px" viewMode={viewMode}>
+                                {JSON.stringify(spec)}
+                            </GenerateWidget>
+                        </div>
+                    )}
+                </div>
+
+                {/* Sidebar Context Legend Panel with Interactive Accordion Dropdown */}
+                <div className="border rounded-xl bg-white p-5 shadow-sm space-y-4">
+                    <h3 className="text-sm font-bold text-slate-900 border-b pb-2">Population Segment Profiles</h3>
+
+                    <div className="space-y-2 font-sans text-sm">
+                        {/* Singapore Citizens Row */}
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border">
+                            <div className="flex items-center space-x-2.5">
+                                <div className="w-3 h-3 rounded-full bg-blue-600 shrink-0" />
+                                <span className="font-medium text-slate-700">Singapore Citizens</span>
+                            </div>
+                            <div className="text-right">
+                                <span className="block font-bold text-slate-900">{pieChartData.citizens.toLocaleString()}</span>
+                                <span className="text-xs text-muted-foreground font-medium">{getPercentage(pieChartData.citizens)}</span>
+                            </div>
+                        </div>
+
+                        {/* Permanent Residents Row */}
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border">
+                            <div className="flex items-center space-x-2.5">
+                                <div className="w-3 h-3 rounded-full bg-emerald-500 shrink-0" />
+                                <span className="font-medium text-slate-700">Permanent Residents</span>
+                            </div>
+                            <div className="text-right">
+                                <span className="block font-bold text-slate-900">{pieChartData.permanentResidents.toLocaleString()}</span>
+                                <span className="text-xs text-muted-foreground font-medium">{getPercentage(pieChartData.permanentResidents)}</span>
+                            </div>
+                        </div>
+
+                        {/* Aggregated Non-Residents Accordion Trigger Row */}
+                        <div
+                            onClick={() => setIsNonResidentExpanded(!isNonResidentExpanded)}
+                            className="flex items-center justify-between p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/15 transition-all select-none"
+                        >
+                            <div className="flex items-center space-x-2.5">
+                                {/* Triangle Arrow Icon */}
+                                <svg
+                                    className={`w-3 h-3 text-amber-600 transition-transform duration-200 ${isNonResidentExpanded ? 'transform rotate-180' : 'transform rotate-90'}`}
+                                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}
+                                >
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                </svg>
+                                <div className="w-3 h-3 rounded-full bg-amber-500 shrink-0" />
+                                <span className="font-semibold text-amber-900">Non-Residents Total</span>
+                            </div>
+                            <div className="text-right">
+                                <span className="block font-bold text-amber-900">{pieChartData.nonResidents.toLocaleString()}</span>
+                                <span className="text-xs text-amber-700 font-bold">{getPercentage(pieChartData.nonResidents)}</span>
+                            </div>
+                        </div>
+
+                        {/* Dropdown Separated Sub-groups using matching shades (Opacity Tracks) */}
+                        {isNonResidentExpanded && (
+                            <div className="pl-6 space-y-1.5 pt-1 border-l-2 border-dashed border-amber-200 ml-4 animate-fadeIn">
+                                {/* Work Permit Holders */}
+                                <div className="flex items-center justify-between p-2 rounded-md bg-amber-500/5 text-xs">
+                                    <div className="flex items-center space-x-2">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80 shrink-0" />
+                                        <span className="text-slate-600 font-medium">Work Permit Holders</span>
+                                    </div>
+                                    <span className="font-mono font-bold text-slate-800">{pieChartData.workPermits.toLocaleString()}</span>
+                                </div>
+
+                                {/* Employment Pass Holders */}
+                                <div className="flex items-center justify-between p-2 rounded-md bg-amber-500/5 text-xs">
+                                    <div className="flex items-center space-x-2">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500/60 shrink-0" />
+                                        <span className="text-slate-600 font-medium">Employment Pass</span>
+                                    </div>
+                                    <span className="font-mono font-bold text-slate-800">{pieChartData.employmentPass.toLocaleString()}</span>
+                                </div>
+
+                                {/* Other Passes (Students/Dependants) */}
+                                <div className="flex items-center justify-between p-2 rounded-md bg-amber-500/5 text-xs">
+                                    <div className="flex items-center space-x-2">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500/40 shrink-0" />
+                                        <span className="text-slate-600 font-medium">Students & Dependants</span>
+                                    </div>
+                                    <span className="font-mono font-bold text-slate-800">{pieChartData.others.toLocaleString()}</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Macro Summary Readout */}
+                    <div className="pt-3 border-t flex justify-between items-center text-xs text-muted-foreground font-mono">
+                        <span>Total Tracked Pool:</span>
+                        <span className="font-bold text-slate-900 text-sm">{pieChartData.total.toLocaleString()}</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    );
+}

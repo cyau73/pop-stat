@@ -1,0 +1,55 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma/client"
+  previewFeatures = ["driverAdapters"]
+}
+
+model Country {
+  id         String      @id @default(uuid())
+  code       String      @unique
+  name       String
+  indicators Indicator[] // Added this relation
+  dataPoints DataPoint[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model Indicator {
+  id          String      @id @default(uuid())
+  code        String      @unique
+  name        String
+  category    String
+  unit        String?
+  
+  // Relate back to Country so your upsert logic works
+  countryId   String
+  country     Country     @relation(fields: [countryId], references: [id])
+  
+  dataPoints  DataPoint[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([category])
+}
+
+model DataPoint {
+  id          String    @id @default(uuid())
+  countryId   String
+  country     Country   @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  indicatorId String
+  indicator   Indicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+  
+  timePeriod  String
+  value       Float
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([countryId, indicatorId, timePeriod])
+  @@index([timePeriod])
+}
