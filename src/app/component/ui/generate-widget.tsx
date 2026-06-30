@@ -115,20 +115,41 @@ export function GenerateWidget({ height = '600px', children, viewMode = 'line' }
         // DRAW CONFIGURATION A: Bar Chart Layout Rendering
         if (viewMode === 'bar') {
             const chartInnerWidth = dimensions.width - padding.left - padding.right;
-            const barWidth = Math.max((chartInnerWidth / data.length) * 0.65, 4);
+            const barWidth = Math.max((chartInnerWidth / (data.length * 1.5)), 4);
 
             data.forEach((pt) => {
-                const x = getX(pt.year) - barWidth / 2;
+                const centerX = getX(pt.year);
                 const y = getY(pt.value);
+
+                // Calculate the actual left edge
+                let x = centerX - barWidth / 2;
+                let actualWidth = barWidth;
+
+                // CLAMP: If x is less than padding, adjust x and width
+                if (x < padding.left) {
+                    actualWidth = barWidth - (padding.left - x);
+                    x = padding.left;
+                }
+
                 const barHeight = dimensions.height - padding.bottom - y;
 
-                ctx.fillStyle = '#3b82f6'; // Clean styling theme color (Blue)
-                ctx.fillRect(x, y, barWidth, barHeight);
+                // Clip the drawing to prevent bleeding into the Y-axis area
+                //if (x < padding.left) return;
+                if (actualWidth > 0) {
+                    ctx.fillStyle = '#3b82f6';
+                    ctx.fillRect(x, y, actualWidth, barHeight);
+                    ctx.strokeStyle = '#1d4ed8';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x, y, actualWidth, barHeight);
+                }
 
-                // Add thin border to distinct vector boxes neatly
-                ctx.strokeStyle = '#1d4ed8';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(x, y, barWidth, barHeight);
+                // ctx.fillStyle = '#3b82f6'; // Clean styling theme color (Blue)
+                // ctx.fillRect(x, y, barWidth, barHeight);
+
+                // // Add thin border to distinct vector boxes neatly
+                // ctx.strokeStyle = '#1d4ed8';
+                // ctx.lineWidth = 1;
+                // ctx.strokeRect(x, y, barWidth, barHeight);
             });
         }
         // DRAW CONFIGURATION B: Line Chart Layout Rendering

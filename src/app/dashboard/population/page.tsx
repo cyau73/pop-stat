@@ -18,10 +18,28 @@ async function getPopulationData() {
     });
 }
 
-export default async function PopulationDashboard() {
-    const data = await getPopulationData();
+export async function getBreakdownData() {
+    return await prisma.indicator.findMany({
+        where: {
+            code: { contains: 'SG_M810791' } // Specifically target your breakdown table
+        },
+        include: {
+            dataPoints: {
+                orderBy: { timePeriod: 'asc' }
+            }
+        }
+    });
+}
 
-    if (!data || data.length === 0) {
+export default async function PopulationDashboard() {
+    const [populationData, breakdownData] = await Promise.all([
+        getPopulationData(),
+        getBreakdownData()
+    ]);
+
+    console.log("SERVER SIDE - Breakdown Data count:", breakdownData.length);
+
+    if (!populationData.length && !breakdownData.length) {
         return (
             <div className="p-8 w-full mx-auto">
                 <h1 className="text-2xl font-bold tracking-tight mb-4">Singapore Population Dashboard</h1>
@@ -32,6 +50,9 @@ export default async function PopulationDashboard() {
         );
     }
 
-    // Pass clean database state directly into your container layout component
-    return <PopulationDashboardView data={data} />;
+    // Pass both datasets to your component
+    return <PopulationDashboardView
+        data={populationData}
+        breakdown={breakdownData}
+    />;
 }

@@ -1,7 +1,6 @@
 // src/app/component/PopulationDashboardView.tsx
 import React from 'react';
 import PopulationExplorer from '@/app/component/ui/PopulationExplorer';
-import PopulationPieChart from '@/app/component/ui/PopulationPieChart';
 
 interface DataPoint {
     timePeriod: string;
@@ -17,9 +16,11 @@ interface IndicatorWithData {
 
 interface PopulationDashboardViewProps {
     data: IndicatorWithData[];
+    breakdown: IndicatorWithData[]; // Add this
 }
 
-export default function PopulationDashboardView({ data }: PopulationDashboardViewProps) {
+export default function PopulationDashboardView({ data, breakdown }: PopulationDashboardViewProps) {
+    console.log("CONTAINER - Breakdown Data:", breakdown);
     // 1. Optimize data structure for the frontend widget mapping
     const widgetData = data.map(ind => ({
         name: ind.name,
@@ -62,7 +63,7 @@ export default function PopulationDashboardView({ data }: PopulationDashboardVie
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">Singapore Population Overview</h1>
                 <p className="text-muted-foreground">
-                    Real-time insights powered by SingStat Table Builder API (`M810001`).
+                    Real-time insights powered by SingStat Table Builder API.
                 </p>
             </div>
 
@@ -73,7 +74,13 @@ export default function PopulationDashboardView({ data }: PopulationDashboardVie
                     Toggle different metrics using the interactive sandbox below to chart demographic trends over time.
                 </p>
 
-                <PopulationExplorer rawMetrics={widgetData} />
+                <PopulationExplorer
+                    rawMetrics={widgetData}
+                    breakdownMetrics={breakdown.map(ind => ({
+                        name: ind.name,
+                        history: ind.dataPoints.map(dp => ({ year: parseInt(dp.timePeriod), value: dp.value ?? 0 }))
+                    }))}
+                />
             </section>
 
             {/* Main Snapshot Table */}

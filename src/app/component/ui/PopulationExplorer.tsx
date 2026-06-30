@@ -5,17 +5,20 @@ import React, { useState, useMemo } from 'react';
 import { GenerateWidget } from './generate-widget';
 import PopulationPieChart from './PopulationPieChart';
 
+interface Metric {
+    name: string;
+    unit: string;
+    history: Array<{ year: number; value: number }>;
+}
+
 interface PopulationExplorerProps {
-    rawMetrics: Array<{
-        name: string;
-        unit: string;
-        history: Array<{ year: number; value: number }>;
-    }>;
+    rawMetrics: Metric[];
+    breakdownMetrics: Metric[];
 }
 
 type ViewMode = 'line' | 'bar' | 'pie';
 
-export default function PopulationExplorer({ rawMetrics }: PopulationExplorerProps) {
+export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: PopulationExplorerProps) {
     const [viewMode, setViewMode] = useState<ViewMode>('pie');
     const [yearScope, setYearScope] = useState<number>(10);
 
@@ -53,42 +56,66 @@ export default function PopulationExplorer({ rawMetrics }: PopulationExplorerPro
             }
         }
 
-        const getValueForYear = (keywords: string[], targetYear: number): number => {
-            const target = rawMetrics.find(metric =>
-                keywords.every(kw => metric.name.toLowerCase().includes(kw.toLowerCase()))
+        const getValueFromMetrics = (metrics: Metric[] | undefined, keywords: string[], targetYear: number): number => {
+            // Add the ?. operator here to safely check if metrics exists
+            const target = metrics?.find(m =>
+                keywords.every(kw => m.name.toLowerCase().includes(kw.toLowerCase()))
             );
-            if (!target) return 0;
 
-            const yearRecord = target.history.find(h => h.year === targetYear);
-            return yearRecord ? yearRecord.value : 0;
+            // Safety check: target?.history ensures we don't crash if target is undefined
+            return target?.history?.find(h => h.year === targetYear)?.value || 0;
         };
 
-        const citizens = getValueForYear(['citizen'], finalSnapshotYear);
-        const permanentResidents = getValueForYear(['permanent resident'], finalSnapshotYear) || getValueForYear(['pr'], finalSnapshotYear);
+        const citizens = getValueFromMetrics(rawMetrics, ['citizen'], finalSnapshotYear);
+        const permanentResidents = getValueFromMetrics(rawMetrics, ['permanent resident'], finalSnapshotYear) || getValueFromMetrics(rawMetrics, ['pr'], finalSnapshotYear);
+        const nonResidents = getValueFromMetrics(rawMetrics, ['non-resident'], finalSnapshotYear);
 
         // Fetch break-down groups for granular legend distribution mapping
-        const workPermits = getValueForYear(['work permit'], finalSnapshotYear);
-        const employmentPass = getValueForYear(['employment pass'], finalSnapshotYear);
-        const others = getValueForYear(['student'], finalSnapshotYear) + getValueForYear(['dependant'], finalSnapshotYear);
+        const employmentPassPct = getValueFromMetrics(breakdownMetrics, ['employment pass'], finalSnapshotYear);
+        const sPassHoldersPct = getValueFromMetrics(breakdownMetrics, ['s pass'], finalSnapshotYear);
+        const workPermitsPct = getValueFromMetrics(breakdownMetrics, ['work permit'], finalSnapshotYear);
+        const migrantWorkersPct = getValueFromMetrics(breakdownMetrics, ['migrant'], finalSnapshotYear);
+        const dependantPassPct = getValueFromMetrics(breakdownMetrics, ['dependant'], finalSnapshotYear);
+        const studentPassPct = getValueFromMetrics(breakdownMetrics, ['student'], finalSnapshotYear);
+        const othersPct = studentPassPct + dependantPassPct;
 
-        let nonResidents = getValueForYear(['non-resident'], finalSnapshotYear);
-        if (nonResidents === 0) {
-            nonResidents = workPermits + employmentPass + others;
-        }
+        const employmentPass = Math.round((employmentPassPct / 100) * nonResidents);
+        const sPassHolders = Math.round((sPassHoldersPct / 100) * nonResidents);
+        const workPermits = Math.round((workPermitsPct / 100) * nonResidents);
+        const migrantWorkers = Math.round((migrantWorkersPct / 100) * nonResidents);
+        const dependantPass = Math.round((dependantPassPct / 100) * nonResidents);
+        const studentPass = Math.round((studentPassPct / 100) * nonResidents);
+        const others = studentPass + dependantPass;
+
+        const totalBreakdownPercentage = employmentPass + sPassHolders + workPermits + migrantWorkers + dependantPass + studentPass;
+        console.log("Sum of breakdown percentages:", totalBreakdownPercentage);
 
         const total = citizens + permanentResidents + nonResidents;
+
+        //const nonResidents = workPermits + employmentPass + studentPass + dependantPass;
 
         return {
             citizens,
             permanentResidents,
             nonResidents,
-            workPermits,
             employmentPass,
+            sPassHolders,
+            workPermits,
+            migrantWorkers,
+            dependantPass,
+            studentPass,
             others,
+            employmentPassPct,
+            sPassHoldersPct,
+            workPermitsPct,
+            migrantWorkersPct,
+            dependantPassPct,
+            studentPassPct,
+            othersPct,
             total,
             snapshotYear: finalSnapshotYear
         };
-    }, [rawMetrics]);
+    }, [rawMetrics, breakdownMetrics]);
 
     const presets = [5, 10, 15, 20];
 
@@ -110,8 +137,8 @@ export default function PopulationExplorer({ rawMetrics }: PopulationExplorerPro
                             key={mode}
                             onClick={() => setViewMode(mode)}
                             className={`px-4 py-1.5 text-xs font-semibold capitalize rounded-md transition-all ${viewMode === mode
-                                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                                    : 'text-muted-foreground hover:text-foreground'
+                                ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                                : 'text-muted-foreground hover:text-foreground'
                                 }`}
                         >
                             {mode} Chart
@@ -138,8 +165,8 @@ export default function PopulationExplorer({ rawMetrics }: PopulationExplorerPro
                                         disabled={preset > maxAvailableYears}
                                         onClick={() => setYearScope(preset)}
                                         className={`px-2 py-0.5 text-[11px] font-mono font-semibold rounded border transition-all ${yearScope === preset
-                                                ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
-                                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                            ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
+                                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                                             } disabled:opacity-40 disabled:pointer-events-none`}
                                     >
                                         {preset}y
@@ -150,8 +177,8 @@ export default function PopulationExplorer({ rawMetrics }: PopulationExplorerPro
                                     disabled={yearScope === maxAvailableYears}
                                     onClick={() => setYearScope(maxAvailableYears)}
                                     className={`px-2 py-0.5 text-[11px] font-mono font-semibold rounded border transition-all ${yearScope === maxAvailableYears
-                                            ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
-                                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                                        ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
+                                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                                         } disabled:opacity-40`}
                                 >
                                     ++
@@ -179,7 +206,7 @@ export default function PopulationExplorer({ rawMetrics }: PopulationExplorerPro
             <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
                 {/* Main Graph Window Pane */}
-                <div className="lg:col-span-2 border rounded-xl bg-card overflow-hidden shadow-sm min-h-[520px] flex items-center justify-center">
+                <div className="lg:col-span-2 border rounded-xl bg-card overflow-hidden shadow-sm min-h-[520px] flex items-center justify-center p-4">
                     {viewMode === 'pie' ? (
                         <PopulationPieChart
                             totalPopulation={pieChartData.total}
@@ -188,7 +215,7 @@ export default function PopulationExplorer({ rawMetrics }: PopulationExplorerPro
                             nonResidentCount={pieChartData.nonResidents}
                         />
                     ) : (
-                        <div className="w-full h-full min-h-[520px]">
+                        <div className="w-full h-full min-h-[520px] overflow-hidden">
                             <GenerateWidget key={viewMode} height="520px" viewMode={viewMode}>
                                 {JSON.stringify(spec)}
                             </GenerateWidget>
@@ -233,10 +260,15 @@ export default function PopulationExplorer({ rawMetrics }: PopulationExplorerPro
                             <div className="flex items-center space-x-2.5">
                                 {/* Triangle Arrow Icon */}
                                 <svg
-                                    className={`w-3 h-3 text-amber-600 transition-transform duration-200 ${isNonResidentExpanded ? 'transform rotate-180' : 'transform rotate-90'}`}
-                                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}
+                                    className={`w-3 h-3 text-amber-600 transition-transform duration-200 ${isNonResidentExpanded ? 'rotate-90' : 'rotate-0'
+                                        }`}
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                    strokeWidth={3}
                                 >
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                    {/* This path creates a simple chevron pointing right */}
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                                 </svg>
                                 <div className="w-3 h-3 rounded-full bg-amber-500 shrink-0" />
                                 <span className="font-semibold text-amber-900">Non-Residents Total</span>
@@ -256,7 +288,7 @@ export default function PopulationExplorer({ rawMetrics }: PopulationExplorerPro
                                         <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80 shrink-0" />
                                         <span className="text-slate-600 font-medium">Work Permit Holders</span>
                                     </div>
-                                    <span className="font-mono font-bold text-slate-800">{pieChartData.workPermits.toLocaleString()}</span>
+                                    <span className="font-mono font-bold text-slate-800">{pieChartData.workPermits.toLocaleString()} ({pieChartData.workPermitsPct.toLocaleString()}%)</span>
                                 </div>
 
                                 {/* Employment Pass Holders */}
@@ -265,16 +297,31 @@ export default function PopulationExplorer({ rawMetrics }: PopulationExplorerPro
                                         <div className="w-2.5 h-2.5 rounded-full bg-amber-500/60 shrink-0" />
                                         <span className="text-slate-600 font-medium">Employment Pass</span>
                                     </div>
-                                    <span className="font-mono font-bold text-slate-800">{pieChartData.employmentPass.toLocaleString()}</span>
+                                    <span className="font-mono font-bold text-slate-800">{pieChartData.employmentPass.toLocaleString()} ({pieChartData.employmentPassPct.toLocaleString()}%)</span>
                                 </div>
-
+                                { /*  S Pass Holder */}
+                                <div className="flex items-center justify-between p-2 rounded-md bg-amber-500/5 text-xs">
+                                    <div className="flex items-center space-x-2">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500/40 shrink-0" />
+                                        <span className="text-slate-600 font-medium">S Pass Holders</span>
+                                    </div>
+                                    <span className="font-mono font-bold text-slate-800">{pieChartData.sPassHolders.toLocaleString()} ({pieChartData.sPassHoldersPct.toLocaleString()}%)</span>
+                                </div>
+                                { /*  Migrant Workers */}
+                                <div className="flex items-center justify-between p-2 rounded-md bg-amber-500/5 text-xs">
+                                    <div className="flex items-center space-x-2">
+                                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500/40 shrink-0" />
+                                        <span className="text-slate-600 font-medium">Migrant Workers</span>
+                                    </div>
+                                    <span className="font-mono font-bold text-slate-800">{pieChartData.migrantWorkers.toLocaleString()} ({pieChartData.migrantWorkersPct.toLocaleString()}%)</span>
+                                </div>
                                 {/* Other Passes (Students/Dependants) */}
                                 <div className="flex items-center justify-between p-2 rounded-md bg-amber-500/5 text-xs">
                                     <div className="flex items-center space-x-2">
                                         <div className="w-2.5 h-2.5 rounded-full bg-amber-500/40 shrink-0" />
                                         <span className="text-slate-600 font-medium">Students & Dependants</span>
                                     </div>
-                                    <span className="font-mono font-bold text-slate-800">{pieChartData.others.toLocaleString()}</span>
+                                    <span className="font-mono font-bold text-slate-800">{pieChartData.others.toLocaleString()}({pieChartData.othersPct.toLocaleString()}%)</span>
                                 </div>
                             </div>
                         )}

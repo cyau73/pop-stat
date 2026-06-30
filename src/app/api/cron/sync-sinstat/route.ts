@@ -2,7 +2,21 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function GET() {
+// Human-readable aliases mapped to SingStat IDs
+const TABLE_MAP: Record<string, string> = {
+    'total': 'M810001',
+    'breakdown': 'M810791',
+};
+
+export async function GET(request: Request) {
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get('type') || 'total';
+    const tableId = TABLE_MAP[type];
+
+    if (!tableId) {
+        return NextResponse.json({ success: false, error: 'Invalid type provided' }, { status: 400 });
+    }
+
     try {
         const country = await prisma.country.upsert({
             where: { code: 'SG' },
@@ -10,14 +24,9 @@ export async function GET() {
             create: { code: 'SG', name: 'Singapore' },
         });
 
-        const url = 'https://tablebuilder.singstat.gov.sg/api/table/tabledata/M810001?offset=20';
+        const url = `https://tablebuilder.singstat.gov.sg/api/table/tabledata/${tableId}?offset=20`;
         const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'accept': 'application/json',
-                'X-Request-istestapi': 'true',
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-            },
+            headers: { 'accept': 'application/json', 'X-Request-istestapi': 'true' },
             cache: 'no-store',
         });
 
@@ -25,13 +34,14 @@ export async function GET() {
 
         const json = await response.json();
         const rows = json.Data?.row || [];
+        const category = json.Data?.theme || 'General';
         let recordsCreated = 0;
 
         for (const row of rows) {
             const indicatorName = row.rowText;
             if (!indicatorName) continue;
 
-            const indicatorCode = `SG_M810001_${indicatorName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`;
+            const indicatorCode = `SG_${tableId}_${indicatorName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`;
 
             const indicator = await prisma.indicator.upsert({
                 where: { code: indicatorCode },
@@ -39,7 +49,7 @@ export async function GET() {
                 create: {
                     code: indicatorCode,
                     name: indicatorName,
-                    category: 'Population',
+                    category: category,
                     unit: row.uoM || 'Units',
                     country: { connect: { id: country.id } }
                 },
@@ -73,7 +83,7 @@ export async function GET() {
             }
         }
 
-        return NextResponse.json({ success: true, recordsCreated });
+        return NextResponse.json({ success: true, table: tableId, recordsCreated });
     } catch (error: any) {
         console.error('SingStat Sync Error:', error);
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
