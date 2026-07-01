@@ -92,7 +92,9 @@ export async function GET(request: Request) {
         }
 
         if (allOperations.length > 0) {
-            await prisma.$transaction(allOperations);
+            await prisma.$transaction(allOperations, {
+                timeout: 30000,
+            });
         }
 
         return NextResponse.json({
