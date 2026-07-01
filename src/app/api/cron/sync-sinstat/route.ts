@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     const type = searchParams.get('type') || 'total';
 
     // Accept 'offset' as a query parameter, default to 20
-    const offset = searchParams.get('offset') || '50';
+    const offset = searchParams.get('offset') || '2020,2021,2022,2023,2024,2025';
 
     const tableId = TABLE_MAP[type];
 
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
         });
 
         // Dynamic URL using the offset input
-        const url = `https://tablebuilder.singstat.gov.sg/api/table/tabledata/${tableId}?offset=${offset}`;
+        const url = `https://tablebuilder.singstat.gov.sg/api/table/tabledata/${tableId}?timeFilter=${offset}`;
         const response = await fetch(url, {
             headers: { 'accept': 'application/json', 'X-Request-istestapi': 'true' },
             cache: 'no-store',
