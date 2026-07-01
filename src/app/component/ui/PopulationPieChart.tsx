@@ -7,6 +7,7 @@ interface Segment {
     label: string;
     value: number;
     color: string;
+    start?: number;
 }
 
 interface PopulationPieChartProps {
@@ -49,33 +50,35 @@ export default function PopulationPieChart({
 
     // Compute angular slices mapping totals to cumulative radians
     const chartData = useMemo(() => {
-        // 1. Inner Ring segments logic
         const totalNonCitizen = prCount + workPermitCount + passCount + migrantCount + otherNonCitizenCount;
-        const innerSegments = [
+
+        // Explicitly type the segments to include the 'start' property
+        const innerSegments: Segment[] = [
             { label: 'Singapore Citizens', value: citizenCount, color: '#059669', start: -Math.PI / 2 },
             { label: 'Non-Citizens', value: totalNonCitizen, color: '#3b82f6', start: -Math.PI / 2 + (citizenCount / totalPopulation) * 2 * Math.PI }
         ];
 
-        // 2. Outer Ring segments logic
         const breakdownSegments: Segment[] = [];
         let outerAngle = -Math.PI / 2 + (citizenCount / totalPopulation) * 2 * Math.PI;
 
-        // We recreate the segments array slicing
         segments.slice(2).forEach(s => {
+            // Now valid because of the updated interface
             breakdownSegments.push({ ...s, start: outerAngle });
             outerAngle += (s.value / totalPopulation) * 2 * Math.PI;
         });
 
-        return [...innerSegments, ...breakdownSegments].map((s, i) => {
+        return [...innerSegments, ...breakdownSegments].map((s) => {
             const extent = (s.value / totalPopulation) * 2 * Math.PI;
+            // Use a fallback for start, as it is optional
+            const start = s.start ?? 0;
             return {
                 ...s,
-                startAngle: s.start,
-                endAngle: s.start + extent,
+                startAngle: start,
+                endAngle: start + extent,
                 percentage: (s.value / totalPopulation) * 100
             };
         });
-    }, [totalPopulation, citizenCount, nonCitizenCount, prCount, workPermitCount, passCount, migrantCount, otherNonCitizenCount]);
+    }, [totalPopulation, citizenCount, nonCitizenCount, prCount, workPermitCount, passCount, migrantCount, otherNonCitizenCount, segments]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
