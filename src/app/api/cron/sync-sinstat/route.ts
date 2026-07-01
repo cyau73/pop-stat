@@ -45,12 +45,15 @@ export async function GET(request: Request) {
         const category = json.Data?.theme || 'General';
         let recordsCreated = 0;
 
+        // ... inside your GET function ...
+        const allOperations: any[] = [];
+
         for (const row of rows) {
             const indicatorName = row.rowText;
             if (!indicatorName) continue;
-
             const indicatorCode = `SG_${tableId}_${indicatorName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`;
 
+            // Upsert the indicator first
             const indicator = await prisma.indicator.upsert({
                 where: { code: indicatorCode },
                 update: { name: indicatorName, unit: row.uoM || 'Units' },
@@ -63,32 +66,35 @@ export async function GET(request: Request) {
                 },
             });
 
-            const dpOperations = (row.columns || []).map((dp: DataPoint) => {
+            // Push operations to an array instead of awaiting immediately
+            for (const dp of (row.columns || [])) {
                 const value = parseFloat(String(dp.value));
-                if (isNaN(value)) return null;
+                if (isNaN(value)) continue;
 
-                return prisma.dataPoint.upsert({
-                    where: {
-                        countryId_indicatorId_timePeriod: {
+                allOperations.push(
+                    prisma.dataPoint.upsert({
+                        where: {
+                            countryId_indicatorId_timePeriod: {
+                                countryId: country.id,
+                                indicatorId: indicator.id,
+                                timePeriod: dp.key,
+                            },
+                        },
+                        update: { value },
+                        create: {
                             countryId: country.id,
                             indicatorId: indicator.id,
                             timePeriod: dp.key,
+                            value,
                         },
-                    },
-                    update: { value },
-                    create: {
-                        countryId: country.id,
-                        indicatorId: indicator.id,
-                        timePeriod: dp.key,
-                        value,
-                    },
-                });
-            }).filter((op: any): op is NonNullable<typeof op> => op !== null);
-
-            if (dpOperations.length > 0) {
-                await prisma.$transaction(dpOperations);
-                recordsCreated += dpOperations.length;
+                    })
+                );
             }
+        }
+
+        // Execute everything in ONE transaction
+        if (allOperations.length > 0) {
+            await prisma.$transaction(allOperations);
         }
 
         return NextResponse.json({ success: true, table: tableId, recordsCreated });
