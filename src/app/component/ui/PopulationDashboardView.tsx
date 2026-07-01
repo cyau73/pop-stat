@@ -1,5 +1,5 @@
 // src/app/component/PopulationDashboardView.tsx
-import React from 'react';
+import { useMemo } from 'react';
 import PopulationExplorer from '@/app/component/ui/PopulationExplorer';
 
 interface DataPoint {
@@ -25,32 +25,52 @@ interface PopulationDashboardViewProps {
     breakdown: IndicatorWithData[]; // Add this
 }
 
+const safeNum = (val: any) => {
+    const parsed = parseFloat(val);
+    return isNaN(parsed) ? 0 : parsed;
+};
+
 export default function PopulationDashboardView({ data, breakdown }: PopulationDashboardViewProps) {
     console.log("CONTAINER - Breakdown Data:", breakdown);
     // 1. Optimize data structure for the frontend widget mapping
-    const widgetData = data.map(ind => ({
-        name: ind.name,
-        unit: ind.unit,
-        history: ind.dataPoints
-            .map(dp => ({ year: parseInt(dp.timePeriod), value: dp.value ?? 0 }))
-            .sort((a, b) => a.year - b.year)
-    }));
+    const widgetData = useMemo(() => {
+        return data.map(ind => ({
+            name: ind.name,
+            unit: ind.unit,
+            history: ind.dataPoints
+                .map(dp => ({ year: parseInt(dp.timePeriod), value: safeNum(dp.value) }))
+                .sort((a, b) => a.year - b.year)
+        }));
+    }, [data]);
 
     // 2. Map raw row arrays into dynamic historical lookup matrices
-    const tableRows = data.map(indicator => {
-        const lookup: Record<string, string> = {};
-        for (const dp of indicator.dataPoints) {
-            if (dp.value !== null && dp.value !== undefined) {
-                lookup[dp.timePeriod] = dp.value.toLocaleString();
+    const tableRows = useMemo(() => {
+        return data.map(indicator => {
+            const lookup: Record<string, string> = {};
+            for (const dp of indicator.dataPoints) {
+                if (dp.value !== null && dp.value !== undefined) {
+                    lookup[dp.timePeriod] = safeNum(dp.value).toLocaleString();
+                }
             }
-        }
-        return {
-            id: indicator.id,
-            name: indicator.name,
-            unit: indicator.unit,
-            values: lookup
-        };
-    });
+            return {
+                id: indicator.id,
+                name: indicator.name,
+                unit: indicator.unit,
+                values: lookup
+            };
+        });
+    }, [data]);
+
+    const breakdownData = useMemo(() => {
+        return breakdown.map(ind => ({
+            name: ind.name,
+            unit: ind.unit ?? 'percentage',
+            history: ind.dataPoints.map(dp => ({
+                year: parseInt(dp.timePeriod),
+                value: safeNum(dp.value)
+            }))
+        }));
+    }, [breakdown]);
 
     // 3. Dynamically compute target tracking years based on current date (with 1-year stats lag)
     const currentYear = new Date().getFullYear(); // 2026
@@ -82,15 +102,7 @@ export default function PopulationDashboardView({ data, breakdown }: PopulationD
 
                 <PopulationExplorer
                     rawMetrics={widgetData}
-                    breakdownMetrics={breakdown.map(ind => ({
-                        name: ind.name,
-                        unit: ind.unit ?? 'percentage' as string,
-                        history: ind.dataPoints.map((dp: DataPoint) => ({
-                            year: parseInt(dp.timePeriod),
-                            // Use ?? 0 to convert null/undefined to 0 before parseFloat
-                            value: parseFloat((dp.value ?? 0).toString())
-                        }))
-                    }))}
+                    breakdownMetrics={breakdownData}
                 />
 
             </section>

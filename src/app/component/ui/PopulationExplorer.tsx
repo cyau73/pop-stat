@@ -1,7 +1,7 @@
 // src/app/component/ui/PopulationExplorer.tsx
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { GenerateWidget } from './generate-widget';
 import PopulationPieChart from './PopulationPieChart';
 
@@ -143,38 +143,37 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
     };
 
     return (
-        <div className="w-full space-y-6">
+        <div className="w-full space-y-4">
             {/* Toolbar Panel */}
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 bg-muted/20 p-4 rounded-xl border">
-
-                {/* View Selector Tabs */}
-                <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0">
-                    {(['line', 'bar', 'pie'] as ViewMode[]).map((mode) => (
+            <div className="flex flex-wrap items-center gap-2 bg-muted/30 p-1.5 rounded-lg border border-slate-200 w-full">
+                {/* 1. View Selector Tabs */}
+                <div className="flex bg-white rounded-md border shadow-sm p-0.5 shrink-0">
+                    {(['pie', 'bar', 'line'] as ViewMode[]).map((mode) => (
                         <button
                             key={mode}
                             onClick={() => setViewMode(mode)}
-                            className={`px-4 py-1.5 text-xs font-semibold capitalize rounded-md transition-all ${viewMode === mode
-                                ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                                : 'text-muted-foreground hover:text-foreground'
-                                }`}
+                            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded ${viewMode === mode ? 'bg-slate-900 text-white' : 'hover:bg-slate-100'}`}
                         >
-                            {mode} Chart
+                            {mode}
                         </button>
                     ))}
                 </div>
 
+                <div className="h-6 w-px bg-slate-300 mx-1" />
+
                 {/* Context Controls Switch */}
                 {viewMode !== 'pie' ? (
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-white p-3 px-4 rounded-lg border shadow-xs w-full lg:w-auto md:min-w-[480px]">
-                        <div className="flex flex-col shrink-0 min-w-[100px]">
+                    <div className="flex flex-grow items-center gap-4 bg-white p-1.5 px-3 rounded-lg border shadow-sm min-w-[300px]">
+                        <div className="flex flex-col shrink-0">
                             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Timeline Window</span>
                             <span className="text-xs font-mono font-bold text-emerald-600">
                                 {yearScope === maxAvailableYears ? 'Full History' : `Last ${yearScope} Years`}
                             </span>
                         </div>
 
-                        <div className="flex flex-col flex-grow space-y-2 w-full">
-                            <div className="flex items-center gap-1.5">
+                        {/* Controls: flex-grow ensures this slider uses the remaining width */}
+                        <div className="flex flex-col flex-grow space-y-1 min-w-[150px]">
+                            <div className="flex items-center gap-1">
                                 {presets.map((preset) => (
                                     <button
                                         key={preset}
@@ -213,21 +212,23 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                         </div>
                     </div>
                 ) : (
-                    <div className="text-xs font-medium text-muted-foreground bg-white px-3 py-1.5 rounded-lg border shadow-xs">
+                    <div className="text-xs font-medium text-muted-foreground bg-white p-0 rounded-lg border shadow-xs">
                         Snapshot Year: <span className="font-mono font-bold text-emerald-600">{pieChartData.snapshotYear}</span>
                     </div>
-                )}
-            </div>
+                )
+                }
+            </div >
 
             {/* View Grid Layout Section */}
-            <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            < div className="grid grid-cols-1 xl:grid-cols-3 gap-4" >
 
                 {/* Main Graph Window Pane */}
-                <div className="lg:col-span-2 border rounded-xl bg-card overflow-hidden shadow-sm min-h-[520px] flex items-center justify-center p-4">
+                < div className="xl:col-span-2 border rounded-xl bg-card shadow-sm min-h-[400px] flex items-center justify-center p-2 relative" >
                     {viewMode === 'pie' ? (
                         <PopulationPieChart
                             totalPopulation={pieChartData.total}
                             citizenCount={pieChartData.citizens}
+                            nonCitizenCount={pieChartData.nonCitizens}
                             prCount={pieChartData.permanentResidents}
                             workPermitCount={pieChartData.workPermits}
                             passCount={pieChartData.passCount}
@@ -235,17 +236,15 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                             otherNonCitizenCount={pieChartData.others}
                         />
                     ) : (
-                        <div className="w-full h-full min-h-[520px] overflow-hidden">
-                            <GenerateWidget key={viewMode} height="520px" viewMode={viewMode}>
-                                {JSON.stringify(spec)}
-                            </GenerateWidget>
-                        </div>
+                        <GenerateWidget key={viewMode} height="520px" viewMode={viewMode}>
+                            {JSON.stringify(spec)}
+                        </GenerateWidget>
                     )}
-                </div>
+                </div >
 
                 {/* Sidebar Context Legend Panel with Interactive Accordion Dropdown */}
-                <div className="border rounded-xl bg-white p-5 shadow-sm space-y-4">
-                    <h3 className="text-sm font-bold text-slate-900 border-b pb-2">Population Segment Profiles</h3>
+                < div className="border rounded-xl bg-white p-4 shadow-sm h-fit" >
+                    <h3 className="text-xs font-bold text-slate-900 border-b pb-2">Population Segment Profiles</h3>
 
                     <div className="space-y-2 font-sans text-sm">
                         {/* Singapore Citizens Row */}
@@ -338,8 +337,8 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                             )}
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
+                </div >
+            </div >
+        </div >
     );
 }

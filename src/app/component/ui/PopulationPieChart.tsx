@@ -12,8 +12,9 @@ interface Segment {
 interface PopulationPieChartProps {
     totalPopulation: number;
     citizenCount: number;
-    prCount: number
+    nonCitizenCount: number;
     // Sub-segments of Non-Citizens
+    prCount: number
     workPermitCount: number;
     passCount: number;
     migrantCount: number;
@@ -23,6 +24,7 @@ interface PopulationPieChartProps {
 export default function PopulationPieChart({
     totalPopulation,
     citizenCount,
+    nonCitizenCount,
     prCount,
     workPermitCount,
     passCount,
@@ -32,129 +34,173 @@ export default function PopulationPieChart({
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
     const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+    const [showBreakdown, setShowBreakdown] = useState(false);
 
     const segments: Segment[] = useMemo(() => [
         { label: 'Singapore Citizens', value: citizenCount, color: '#059669' }, // Green
+        { label: 'Non-Citizens', value: nonCitizenCount, color: '#1e3a8a' }, // Deep Navy
         // Non-Citizens: Ranging from lighter (general) to darker (specific) blues
         { label: 'Permanent Residents', value: prCount, color: '#60a5fa' },      // Bright Blue
         { label: 'Work Permits', value: workPermitCount, color: '#3b82f6' },     // Primary Blue
         { label: 'Employment & S Pass', value: passCount, color: '#2563eb' },    // Darker Blue
         { label: 'Domestic Workers', value: migrantCount, color: '#1d4ed8' },    // Even Darker
         { label: 'Other Non-Citizens', value: otherNonCitizenCount, color: '#1e3a8a' } // Deep Navy
-    ], [citizenCount, prCount, workPermitCount, passCount, migrantCount, otherNonCitizenCount]);
+    ], [citizenCount, nonCitizenCount, prCount, workPermitCount, passCount, migrantCount, otherNonCitizenCount]);
 
     // Compute angular slices mapping totals to cumulative radians
     const chartData = useMemo(() => {
-        let currentAngle = -Math.PI / 2; // Start from top vertical 12 o'clock center
-        return segments.map(seg => {
-            const percentage = (seg.value / totalPopulation) * 100;
-            const angleExtent = (seg.value / totalPopulation) * (2 * Math.PI);
-            const startAngle = currentAngle;
-            const endAngle = currentAngle + angleExtent;
-            currentAngle = endAngle;
+        // 1. Inner Ring segments logic
+        const totalNonCitizen = prCount + workPermitCount + passCount + migrantCount + otherNonCitizenCount;
+        const innerSegments = [
+            { label: 'Singapore Citizens', value: citizenCount, color: '#059669', start: -Math.PI / 2 },
+            { label: 'Non-Citizens', value: totalNonCitizen, color: '#3b82f6', start: -Math.PI / 2 + (citizenCount / totalPopulation) * 2 * Math.PI }
+        ];
 
+        // 2. Outer Ring segments logic
+        const breakdownSegments: Segment[] = [];
+        let outerAngle = -Math.PI / 2 + (citizenCount / totalPopulation) * 2 * Math.PI;
+
+        // We recreate the segments array slicing
+        segments.slice(2).forEach(s => {
+            breakdownSegments.push({ ...s, start: outerAngle });
+            outerAngle += (s.value / totalPopulation) * 2 * Math.PI;
+        });
+
+        return [...innerSegments, ...breakdownSegments].map((s, i) => {
+            const extent = (s.value / totalPopulation) * 2 * Math.PI;
             return {
-                ...seg,
-                percentage,
-                startAngle,
-                endAngle
+                ...s,
+                startAngle: s.start,
+                endAngle: s.start + extent,
+                percentage: (s.value / totalPopulation) * 100
             };
         });
-    }, [segments, totalPopulation]);
+    }, [totalPopulation, citizenCount, nonCitizenCount, prCount, workPermitCount, passCount, migrantCount, otherNonCitizenCount]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
-
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
         const dpr = window.devicePixelRatio || 1;
-        const width = 400;
-        const height = 400;
-
+        const width = 500;
+        const height = 500;
         canvas.width = width * dpr;
         canvas.height = height * dpr;
         ctx.scale(dpr, dpr);
-
         ctx.clearRect(0, 0, width, height);
 
         const centerX = width / 2;
         const centerY = height / 2;
-        const outerRadius = 140;
-        const innerRadius = 80; // Creates clean modern donut ring view
 
-        chartData.forEach((slice, idx) => {
-            const isHovered = hoveredIndex === idx;
-            const radiusOffset = isHovered ? 8 : 0; // Pop out slice subtly on hover
+        const innerRingOuter = width * 0.28;
+        const innerRingInner = width * 0.16;
+        const outerRingOuter = width * 0.44;
+        const outerRingInner = width * 0.32;
 
+        const innerLabelRadius = (innerRingOuter + innerRingInner) / 2;
+        const outerLabelRadius = (outerRingOuter + outerRingInner) / 2;
+
+        // 1. Draw INNER Ring
+        const totalNonCitizen = prCount + workPermitCount + passCount + migrantCount + otherNonCitizenCount;
+        const innerSegments = [
+            { label: 'Citizens', value: citizenCount, color: '#059669' },
+            { label: 'Non-Citizens', value: totalNonCitizen, color: '#3b82f6' }
+        ];
+
+        let currentAngle = -Math.PI / 2;
+        innerSegments.forEach(s => {
+            const extent = (s.value / totalPopulation) * 2 * Math.PI;
             ctx.beginPath();
-            ctx.arc(centerX, centerY, outerRadius + radiusOffset, slice.startAngle, slice.endAngle);
-            ctx.arc(centerX, centerY, innerRadius, slice.endAngle, slice.startAngle, true);
-            ctx.closePath();
-
-            ctx.fillStyle = slice.color;
+            // Use constants
+            ctx.arc(centerX, centerY, innerRingOuter, currentAngle, currentAngle + extent);
+            ctx.arc(centerX, centerY, innerRingInner, currentAngle + extent, currentAngle, true);
+            ctx.fillStyle = s.color;
             ctx.fill();
             ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 3;
+            ctx.lineWidth = 2;
             ctx.stroke();
 
-            // Render readable inline data percentage labels inside the slices if big enough
-            if (slice.percentage > 4) {
-                const midAngle = (slice.startAngle + slice.endAngle) / 2;
-                const labelRadius = innerRadius + (outerRadius - innerRadius) / 2 + (isHovered ? 4 : 0);
-                const labelX = centerX + Math.cos(midAngle) * labelRadius;
-                const labelY = centerY + Math.sin(midAngle) * labelRadius;
+            // Calculate label position based on constants
+            const midAngle = currentAngle + extent / 2;
+            const labelX = centerX + Math.cos(midAngle) * innerLabelRadius;
+            const labelY = centerY + Math.sin(midAngle) * innerLabelRadius;
 
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 12px ui-sans-serif, system-ui';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText(`${slice.percentage.toFixed(1)}%`, labelX, labelY);
-            }
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`${((s.value / totalPopulation) * 100).toFixed(1)}%`, labelX, labelY);
+
+            currentAngle += extent;
         });
-    }, [chartData, hoveredIndex]);
+
+        // 2. Draw OUTER Ring
+        if (showBreakdown) {
+            let outerAngle = -Math.PI / 2 + ((citizenCount / totalPopulation) * 2 * Math.PI);
+            segments.slice(2).forEach(s => {
+                const extent = (s.value / totalPopulation) * 2 * Math.PI;
+                ctx.beginPath();
+                // Use constants
+                ctx.arc(centerX, centerY, outerRingOuter, outerAngle, outerAngle + extent);
+                ctx.arc(centerX, centerY, outerRingInner, outerAngle + extent, outerAngle, true);
+                ctx.fillStyle = s.color;
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                if (extent > 0.2) {
+                    const midAngle = outerAngle + extent / 2;
+                    const labelX = centerX + Math.cos(midAngle) * outerLabelRadius;
+                    const labelY = centerY + Math.sin(midAngle) * outerLabelRadius;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 12px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(`${((s.value / totalPopulation) * 100).toFixed(1)}%`, labelX, labelY);
+                }
+                outerAngle += extent;
+            });
+        }
+    }, [showBreakdown, totalPopulation, citizenCount, prCount, workPermitCount, passCount, migrantCount, otherNonCitizenCount]);
 
     const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
+        const canvas = e.currentTarget;
         const rect = canvas.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
+        const dx = e.clientX - rect.left - rect.width / 2;
+        const dy = e.clientY - rect.top - rect.height / 2;
+        const dist = Math.sqrt(dx * dx + dy * dy);
 
-        const centerX = rect.width / 2;
-        const centerY = rect.height / 2;
+        // 1. Get the raw angle
+        let angle = Math.atan2(dy, dx);
+        if (angle < -Math.PI / 2) angle += 2 * Math.PI;
 
-        const dx = mouseX - centerX;
-        const dy = mouseY - centerY;
-        const distanceFromCenter = Math.sqrt(dx * dx + dy * dy);
+        // 2. Find the match based ONLY on angle and visibility
+        const match = chartData.find(s => {
+            // Logic: 
+            // - Citizens/Non-Citizens are ALWAYS visible
+            // - Breakdown segments are ONLY visible if showBreakdown is true
+            const isVisible = ['Singapore Citizens', 'Non-Citizens'].includes(s.label) || showBreakdown;
+            return isVisible && angle >= s.startAngle && angle <= s.endAngle;
+        });
 
-        // Check if mouse resides cleanly within radius bounds
-        if (distanceFromCenter >= 75 && distanceFromCenter <= 155) {
-            let angle = Math.atan2(dy, dx);
-            if (angle < -Math.PI / 2) {
-                angle += 2 * Math.PI; // Adjust polar alignment matrix offset
-            }
-
-            const foundIdx = chartData.findIndex(slice => angle >= slice.startAngle && angle <= slice.endAngle);
-
-            if (foundIdx !== -1) {
-                setHoveredIndex(foundIdx);
-                setTooltipPos({ x: mouseX, y: mouseY });
-                return;
-            }
+        // 3. Distance check
+        if (match && dist >= 75 && dist <= 220) {
+            setHoveredIndex(chartData.indexOf(match));
+            setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        } else {
+            setHoveredIndex(null);
         }
-
-        setHoveredIndex(null);
-        setTooltipPos(null);
     };
 
     return (
-        <div className="flex flex-col md:flex-row items-center justify-center gap-8 bg-card border rounded-xl p-6 shadow-sm w-full">
-            <div className="relative w-[400px] h-[400px]">
+        <div className="flex flex-col md:flex-row items-center justify-center gap-8 w-full">
+            <div className="relative w-full max-w-[600px] aspect-square mx-auto">
                 <canvas
                     ref={canvasRef}
+                    onClick={() => setShowBreakdown(prev => !prev)}
                     onMouseMove={handleMouseMove}
                     onMouseLeave={() => { setHoveredIndex(null); setTooltipPos(null); }}
                     className="w-full h-full cursor-pointer block"
@@ -178,7 +224,7 @@ export default function PopulationPieChart({
             </div>
 
             {/* Side descriptive layout guide legends */}
-            <div className="flex flex-col space-y-3 min-w-[240px]">
+            {/* <div className="flex flex-col space-y-3 min-w-[240px]">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                     Demographic Profiles
                 </h3>
@@ -202,7 +248,7 @@ export default function PopulationPieChart({
                         </div>
                     </div>
                 ))}
-            </div>
+            </div> */}
         </div>
     );
 }
