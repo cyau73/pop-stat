@@ -83,29 +83,31 @@ export default function PopulationPieChart({
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
+
+        // Use the actual container size
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
-
-        const dpr = window.devicePixelRatio || 1;
-        const width = 500;
-        const height = 500;
-        canvas.width = width * dpr;
-        canvas.height = height * dpr;
         ctx.scale(dpr, dpr);
-        ctx.clearRect(0, 0, width, height);
 
-        const centerX = width / 2;
-        const centerY = height / 2;
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        // Base radius on the smaller dimension to prevent clipping
+        const radius = Math.min(rect.width, rect.height) / 2;
 
-        const innerRingOuter = width * 0.28;
-        const innerRingInner = width * 0.16;
-        const outerRingOuter = width * 0.44;
-        const outerRingInner = width * 0.32;
-
+        // Relative sizing based on the actual radius
+        const innerRingOuter = radius * 0.8;
+        const innerRingInner = radius * 0.5;
         const innerLabelRadius = (innerRingOuter + innerRingInner) / 2;
-        const outerLabelRadius = (outerRingOuter + outerRingInner) / 2;
 
-        // 1. Draw INNER Ring
+        ctx.clearRect(0, 0, rect.width, rect.height);
+
+        // 1. Draw INNER Ring ONLY
         const totalNonCitizen = prCount + workPermitCount + passCount + migrantCount + otherNonCitizenCount;
         const innerSegments = [
             { label: 'Citizens', value: citizenCount, color: '#059669' },
@@ -116,7 +118,6 @@ export default function PopulationPieChart({
         innerSegments.forEach(s => {
             const extent = (s.value / totalPopulation) * 2 * Math.PI;
             ctx.beginPath();
-            // Use constants
             ctx.arc(centerX, centerY, innerRingOuter, currentAngle, currentAngle + extent);
             ctx.arc(centerX, centerY, innerRingInner, currentAngle + extent, currentAngle, true);
             ctx.fillStyle = s.color;
@@ -125,7 +126,6 @@ export default function PopulationPieChart({
             ctx.lineWidth = 2;
             ctx.stroke();
 
-            // Calculate label position based on constants
             const midAngle = currentAngle + extent / 2;
             const labelX = centerX + Math.cos(midAngle) * innerLabelRadius;
             const labelY = centerY + Math.sin(midAngle) * innerLabelRadius;
@@ -139,35 +139,8 @@ export default function PopulationPieChart({
             currentAngle += extent;
         });
 
-        // 2. Draw OUTER Ring
-        if (showBreakdown) {
-            let outerAngle = -Math.PI / 2 + ((citizenCount / totalPopulation) * 2 * Math.PI);
-            segments.slice(2).forEach(s => {
-                const extent = (s.value / totalPopulation) * 2 * Math.PI;
-                ctx.beginPath();
-                // Use constants
-                ctx.arc(centerX, centerY, outerRingOuter, outerAngle, outerAngle + extent);
-                ctx.arc(centerX, centerY, outerRingInner, outerAngle + extent, outerAngle, true);
-                ctx.fillStyle = s.color;
-                ctx.fill();
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-
-                if (extent > 0.2) {
-                    const midAngle = outerAngle + extent / 2;
-                    const labelX = centerX + Math.cos(midAngle) * outerLabelRadius;
-                    const labelY = centerY + Math.sin(midAngle) * outerLabelRadius;
-                    ctx.fillStyle = '#ffffff';
-                    ctx.font = 'bold 12px sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(`${((s.value / totalPopulation) * 100).toFixed(1)}%`, labelX, labelY);
-                }
-                outerAngle += extent;
-            });
-        }
-    }, [showBreakdown, totalPopulation, citizenCount, prCount, workPermitCount, passCount, migrantCount, otherNonCitizenCount]);
+        // Outer ring code is completely removed from this block
+    }, [totalPopulation, citizenCount, prCount, workPermitCount, passCount, migrantCount, otherNonCitizenCount]);
 
     const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
         const canvas = e.currentTarget;
