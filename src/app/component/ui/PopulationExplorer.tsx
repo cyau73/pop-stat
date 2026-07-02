@@ -31,8 +31,6 @@ type ViewMode = 'line' | 'bar' | 'pie';
 export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: PopulationExplorerProps) {
     const [viewMode, setViewMode] = useState<ViewMode>('pie');
     const [yearScope, setYearScope] = useState<number>(10);
-
-    // Toggle state tracking the breakdown of non-resident sub-categories
     const [isNonCitizenExpanded, setIsNonCitizenExpanded] = useState<boolean>(false);
 
     const maxAvailableYears = rawMetrics[0]?.history?.length || 20;
@@ -49,104 +47,64 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
         }
     };
 
-    // Extracts the exact dynamically calculated snapshot year for the Pie Chart
     const pieChartData = useMemo(() => {
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth();
+        const targetYear = currentMonth >= 5 ? currentYear - 1 : currentYear - 2;
 
-        const calculatedTargetYear = currentMonth >= 5 ? currentYear - 1 : currentYear - 2;
+        const history = rawMetrics[0]?.history || [];
+        const availableYears = history.map(h => h.year);
+        const snapshotYear = availableYears.includes(targetYear)
+            ? targetYear
+            : (availableYears.length > 0 ? Math.max(...availableYears) : currentYear);
 
-        let finalSnapshotYear = calculatedTargetYear;
-
-        if (rawMetrics.length > 0 && rawMetrics[0].history.length > 0) {
-            const hasTargetYear = rawMetrics[0].history.some(h => h.year === calculatedTargetYear);
-            if (!hasTargetYear) {
-                finalSnapshotYear = rawMetrics[0].history[rawMetrics[0].history.length - 1].year;
-            }
-        }
-
-        const getValueFromMetrics = (metrics: Metric[] | undefined, keywords: string[], targetYear: number): number => {
-            // Add the ?. operator here to safely check if metrics exists
-            const target = metrics?.find(m =>
-                keywords.every(kw => m.name.toLowerCase().includes(kw.toLowerCase()))
-            );
-
-            // Safety check: target?.history ensures we don't crash if target is undefined
-            return target?.history?.find(h => h.year === targetYear)?.value || 0;
+        const getValueForYear = (metrics: Metric[], nameMatch: string, year: number) => {
+            const metric = metrics.find(m => m.name.toLowerCase() === nameMatch.toLowerCase());
+            return metric?.history.find(h => h.year === year)?.value || 0;
         };
 
-        const citizens = getValueFromMetrics(rawMetrics, ['citizen'], finalSnapshotYear);
-        const permanentResidents = getValueFromMetrics(rawMetrics, ['permanent resident'], finalSnapshotYear) || getValueFromMetrics(rawMetrics, ['pr'], finalSnapshotYear);
-        const nonResidents = getValueFromMetrics(rawMetrics, ['non-resident'], finalSnapshotYear);
-        const nonCitizens = permanentResidents + nonResidents;
+        // 1. Get raw counts
+        const citizenCount = getValueForYear(rawMetrics, 'Singapore Citizen Population', snapshotYear);
+        const prCount = getValueForYear(rawMetrics, 'Permanent Resident Population', snapshotYear);
+        const nonResidentCount = getValueForYear(rawMetrics, 'Non-Resident Population', snapshotYear);
 
-        // Fetch break-down groups for granular legend distribution mapping
-        const employmentPassPct = getValueFromMetrics(breakdownMetrics, ['employment pass'], finalSnapshotYear);
-        const sPassHoldersPct = getValueFromMetrics(breakdownMetrics, ['s pass'], finalSnapshotYear);
-        const workPermitsPct = getValueFromMetrics(breakdownMetrics, ['work permit'], finalSnapshotYear);
-        const migrantWorkersPct = getValueFromMetrics(breakdownMetrics, ['migrant'], finalSnapshotYear);
-        const dependantPassPct = getValueFromMetrics(breakdownMetrics, ['dependant'], finalSnapshotYear);
-        const studentPassPct = getValueFromMetrics(breakdownMetrics, ['student'], finalSnapshotYear);
-        const othersPct = studentPassPct + dependantPassPct;
+        // 2. Get breakdown percentages (database returns them as numbers like 25.5 for 25.5%)
+        const workPermitPct = getValueForYear(breakdownMetrics, 'Work Permit Holders', snapshotYear);
+        const sPassPct = getValueForYear(breakdownMetrics, 'S Pass Holders', snapshotYear);
+        const epPct = getValueForYear(breakdownMetrics, 'Employment Pass Holders', snapshotYear);
+        const migrantPct = getValueForYear(breakdownMetrics, 'Migrant Domestic Workers', snapshotYear);
+        const studentPct = getValueForYear(breakdownMetrics, 'Student Pass Holders', snapshotYear);
+        const ltvpPct = getValueForYear(breakdownMetrics, "Long-Term Visit Pass Holders And Dependant's Pass Holders", snapshotYear);
 
-        const employmentPass = Math.round((employmentPassPct / 100) * nonResidents);
-        const sPassHolders = Math.round((sPassHoldersPct / 100) * nonResidents);
-        const passCount = employmentPass + sPassHolders;
-
-        const workPermits = Math.round((workPermitsPct / 100) * nonResidents);
-        const migrantWorkers = Math.round((migrantWorkersPct / 100) * nonResidents);
-
-        const dependantPass = Math.round((dependantPassPct / 100) * nonResidents);
-        const studentPass = Math.round((studentPassPct / 100) * nonResidents);
-        const others = studentPass + dependantPass;
-
-        const totalBreakdownPercentage = employmentPass + sPassHolders + workPermits + migrantWorkers + dependantPass + studentPass;
-        console.log("Sum of breakdown percentages:", totalBreakdownPercentage);
-
-        const total = citizens + permanentResidents + nonResidents;
-
-        //const nonResidents = workPermits + employmentPass + studentPass + dependantPass;
+        // 3. Calculate actual counts based on the non-resident population
+        const workPermits = Math.round((workPermitPct / 100) * nonResidentCount);
+        const passCount = Math.round(((sPassPct + epPct) / 100) * nonResidentCount);
+        const migrantWorkers = Math.round((migrantPct / 100) * nonResidentCount);
+        const others = Math.round(((studentPct + ltvpPct) / 100) * nonResidentCount);
 
         return {
-            citizens,
-            nonCitizens,
-            permanentResidents,
-            nonResidents,
-            employmentPass,
-            sPassHolders,
-            workPermits,
-            migrantWorkers,
-            dependantPass,
-            studentPass,
-            passCount,
-            others,
-            employmentPassPct,
-            sPassHoldersPct,
-            workPermitsPct,
-            migrantWorkersPct,
-            dependantPassPct,
-            studentPassPct,
-            othersPct,
-            total,
-            snapshotYear: finalSnapshotYear
+            total: getValueForYear(rawMetrics, 'Total Population', snapshotYear),
+            citizens: citizenCount,
+            permanentResidents: prCount,
+            nonCitizens: prCount + nonResidentCount,
+            workPermits: workPermits,
+            passCount: passCount,
+            migrantWorkers: migrantWorkers,
+            others: others,
+            snapshotYear
         };
     }, [rawMetrics, breakdownMetrics]);
 
-    const presets = [5, 10, 15, 20];
-
-    // Helper functions for percentages
     const getPercentage = (value: number) => {
-        if (!pieChartData.total) return '0.0%';
+        if (!pieChartData.total || pieChartData.total === 0) return '0.0%';
         return `${((value / pieChartData.total) * 100).toFixed(1)}%`;
     };
 
     return (
         <div className="w-full space-y-4">
-            {/* Toolbar Panel */}
             <div className="flex flex-wrap items-center gap-2 bg-muted/30 p-1.5 rounded-lg border border-slate-200 w-full">
-                {/* 1. View Selector Tabs */}
-                <div className="flex bg-white rounded-md border shadow-sm p-0.5 shrink-0">
+                <div className="flex bg-white rounded-md border shadow-sm p-0.5">
                     {(['pie', 'bar', 'line'] as ViewMode[]).map((mode) => (
                         <button
                             key={mode}
@@ -157,72 +115,13 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                         </button>
                     ))}
                 </div>
+                <div className="text-xs font-medium text-muted-foreground bg-white px-3 py-1.5 rounded-lg border shadow-xs">
+                    Snapshot Year: <span className="font-mono font-bold text-emerald-600">{pieChartData.snapshotYear}</span>
+                </div>
+            </div>
 
-                <div className="h-6 w-px bg-slate-300 mx-1" />
-
-                {/* Context Controls Switch */}
-                {viewMode !== 'pie' ? (
-                    <div className="flex flex-grow items-center gap-4 bg-white p-1.5 px-3 rounded-lg border shadow-sm min-w-[300px]">
-                        <div className="flex flex-col shrink-0">
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Timeline Window</span>
-                            <span className="text-xs font-mono font-bold text-emerald-600">
-                                {yearScope === maxAvailableYears ? 'Full History' : `Last ${yearScope} Years`}
-                            </span>
-                        </div>
-
-                        {/* Controls: flex-grow ensures this slider uses the remaining width */}
-                        <div className="flex flex-col flex-grow space-y-1 min-w-[150px]">
-                            <div className="flex items-center gap-1">
-                                {presets.map((preset) => (
-                                    <button
-                                        key={preset}
-                                        type="button"
-                                        disabled={preset > maxAvailableYears}
-                                        onClick={() => setYearScope(preset)}
-                                        className={`px-2 py-0.5 text-[11px] font-mono font-semibold rounded border transition-all ${yearScope === preset
-                                            ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
-                                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                                            } disabled:opacity-40 disabled:pointer-events-none`}
-                                    >
-                                        {preset}y
-                                    </button>
-                                ))}
-                                <button
-                                    type="button"
-                                    disabled={yearScope === maxAvailableYears}
-                                    onClick={() => setYearScope(maxAvailableYears)}
-                                    className={`px-2 py-0.5 text-[11px] font-mono font-semibold rounded border transition-all ${yearScope === maxAvailableYears
-                                        ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
-                                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
-                                        } disabled:opacity-40`}
-                                >
-                                    ++
-                                </button>
-                            </div>
-
-                            <input
-                                type="range"
-                                min={3}
-                                max={maxAvailableYears}
-                                value={yearScope}
-                                onChange={(e) => setYearScope(Number(e.target.value))}
-                                className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
-                            />
-                        </div>
-                    </div>
-                ) : (
-                    <div className="text-xs font-medium text-muted-foreground bg-white p-0 rounded-lg border shadow-xs">
-                        Snapshot Year: <span className="font-mono font-bold text-emerald-600">{pieChartData.snapshotYear}</span>
-                    </div>
-                )
-                }
-            </div >
-
-            {/* View Grid Layout Section */}
-            < div className="grid grid-cols-1 xl:grid-cols-3 gap-4" >
-
-                {/* Main Graph Window Pane */}
-                < div className="xl:col-span-2 border rounded-xl bg-card shadow-sm min-h-[400px] flex items-center justify-center p-2 relative" >
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                <div className="xl:col-span-2 border rounded-xl bg-card shadow-sm min-h-[400px] flex items-center justify-center p-2 relative">
                     {viewMode === 'pie' ? (
                         <PopulationPieChart
                             totalPopulation={pieChartData.total}
@@ -239,7 +138,7 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                             {JSON.stringify(spec)}
                         </GenerateWidget>
                     )}
-                </div >
+                </div>
 
                 {/* Sidebar Context Legend Panel with Interactive Accordion Dropdown */}
                 < div className="border rounded-xl bg-white p-4 shadow-sm h-fit" >
