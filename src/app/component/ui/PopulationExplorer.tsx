@@ -34,7 +34,6 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
 
     // Toggle state tracking the breakdown of non-resident sub-categories
     const [isNonCitizenExpanded, setIsNonCitizenExpanded] = useState<boolean>(false);
-    const [isNonResidentExpanded, setIsNonResidentExpanded] = useState<boolean>(false);
 
     const maxAvailableYears = rawMetrics[0]?.history?.length || 20;
 
@@ -290,49 +289,36 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                                             <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.permanentResidents)}</span>
                                         </div>
                                     </div>
-
-                                    {/* 3. Non-Resident Sub-types (Second Level) */}
-                                    <div
-                                        onClick={() => setIsNonResidentExpanded(!isNonResidentExpanded)}
-                                        className="flex items-center justify-between p-2 rounded-md bg-amber-500/10 cursor-pointer text-xs font-semibold text-amber-900 hover:bg-amber-500/20"
-                                    >
-                                        <div className="flex items-center space-x-2">
-                                            <svg className={`w-2.5 h-2.5 transition-transform ${isNonResidentExpanded ? 'rotate-90' : 'rotate-0'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                            </svg>
-                                            <span>Non-Resident Sub-types</span>
-                                        </div>
+                                    <div className="flex items-center justify-between rounded-md bg-indigo-500/5 text-xs">
+                                        <span className="font-medium text-slate-700">Work Permit Holders</span>
                                         <div className="text-right">
-                                            <span>{pieChartData.nonResidents.toLocaleString()}</span><br />
-                                            <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.nonResidents)}</span>
+                                            <span className="font-mono font-bold">{pieChartData.workPermits.toLocaleString()}</span><br />
+                                            <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.workPermits)}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between rounded-md bg-indigo-500/5 text-xs">
+                                        <span className="font-medium text-slate-700">Migrant Domestic Workers Permits</span>
+                                        <div className="text-right">
+                                            <span className="font-mono font-bold">{pieChartData.migrantWorkers.toLocaleString()}</span><br />
+                                            <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.migrantWorkers)}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between rounded-md bg-indigo-500/5 text-xs">
+                                        <span className="font-medium text-slate-700">Employment and S-Pass Holders</span>
+                                        <div className="text-right">
+                                            <span className="font-mono font-bold">{pieChartData.passCount.toLocaleString()}</span><br />
+                                            <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.passCount)}</span>
+                                        </div>
+
+                                    </div>
+                                    <div className="flex items-center justify-between rounded-md bg-indigo-500/5 text-xs">
+                                        <span className="font-medium text-slate-700">Long-Term, Dependants and Students</span>
+                                        <div className="text-right">
+                                            <span className="font-mono font-bold">{pieChartData.others.toLocaleString()}</span><br />
+                                            <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.others)}</span>
                                         </div>
                                     </div>
 
-                                    {/* Nested Breakdown Items */}
-                                    {isNonResidentExpanded && (
-                                        <div className="pl-4 space-y-1">
-                                            <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
-                                                <span className="text-slate-600 font-medium">Work Permit Holders</span>
-                                                <span className="font-mono font-bold text-slate-800">{pieChartData.workPermits.toLocaleString()}</span>
-                                            </div>
-                                            <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
-                                                <span className="text-slate-600 font-medium">Migrant Domestic Workers Permits</span>
-                                                <span className="font-mono font-bold text-slate-800">{pieChartData.migrantWorkers.toLocaleString()}</span>
-                                            </div>
-                                            <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
-                                                <span className="text-slate-600 font-medium">Employment and S-Pass Holders</span>
-                                                <div className="text-right">
-                                                    <span className="font-mono font-bold text-slate-800">{pieChartData.passCount.toLocaleString()}</span>
-                                                    {/* <span className="font-mono font-bold text-slate-800">({pieChartData.employmentPassPct.toLocaleString()}%)</span> */}
-                                                </div>
-
-                                            </div>
-                                            <div className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 text-xs">
-                                                <span className="text-slate-600 font-medium">Long-Term, Dependants and Students</span>
-                                                <span className="font-mono font-bold text-slate-800">{pieChartData.others.toLocaleString()}</span>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             )}
                         </div>
