@@ -33,25 +33,27 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
     const [yearScope, setYearScope] = useState<number>(10);
     const [isNonCitizenExpanded, setIsNonCitizenExpanded] = useState<boolean>(false);
 
-    const maxAvailableYears = rawMetrics[0]?.history?.length || 20;
-
     // Get all available years from the first metric
     const availableYears = useMemo(() => {
         return rawMetrics[0]?.history.map(h => h.year).sort((a, b) => b - a) || [];
     }, [rawMetrics]);
+
     // Default to the most recent year
     const [selectedYear, setSelectedYear] = useState<number>(availableYears[0]);
 
-    // const filteredMetrics = rawMetrics.map(metric => ({
-    //     ...metric,
-    //     history: metric.history.slice(-yearScope)
-    // }));
-    // const spec = {
-    //     widgetSpec: {
-    //         height: "600px",
-    //         prompt: `**Objective:** Render chart data.\n **View Type:** ${viewMode}.\n **Data State:** Render context parsed dynamically: ${JSON.stringify(filteredMetrics)}.`
-    //     }
-    // };
+    const filteredMetrics = useMemo(() => {
+        return rawMetrics.map(metric => ({
+            ...metric,
+            history: metric.history.slice(-yearScope)
+        }));
+    }, [rawMetrics, yearScope]);
+
+    const spec = useMemo(() => ({
+        widgetSpec: {
+            height: "600px",
+            prompt: `**Objective:** Render chart data.\n **View Type:** ${viewMode}.\n **Data State:** Render context parsed dynamically: ${JSON.stringify(filteredMetrics)}.`
+        }
+    }), [viewMode, filteredMetrics]);
 
     // Update state if data changes
     useEffect(() => {
@@ -61,28 +63,12 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
     }, [availableYears, selectedYear]);
 
     const pieChartData = useMemo(() => {
-        // const now = new Date();
-        // const currentYear = now.getFullYear();
-        // const currentMonth = now.getMonth();
-        // const targetYear = currentMonth >= 5 ? currentYear - 1 : currentYear - 2;
-
-        // const history = rawMetrics[0]?.history || [];
-        // const availableYears = history.map(h => h.year);
-        // const snapshotYear = availableYears.includes(targetYear)
-        //     ? targetYear
-        //     : (availableYears.length > 0 ? Math.max(...availableYears) : currentYear);
-
         const snapshotYear = selectedYear;
 
         const getValueForYear = (metrics: Metric[], nameMatch: string, year: number) => {
             const metric = metrics.find(m => m.name.toLowerCase() === nameMatch.toLowerCase());
             return metric?.history.find(h => h.year === year)?.value || 0;
         };
-
-        // const getValueForYear = (metrics: Metric[], nameMatch: string, year: number) => {
-        //     const metric = metrics.find(m => m.name.toLowerCase() === nameMatch.toLowerCase());
-        //     return metric?.history.find(h => h.year === year)?.value || 0;
-        // };
 
         // 1. Get raw counts
         const citizenCount = getValueForYear(rawMetrics, 'Singapore Citizen Population', snapshotYear);
@@ -121,6 +107,23 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
         return `${((value / pieChartData.total) * 100).toFixed(1)}%`;
     };
 
+    // Define the structure of a row
+    interface RowConfig {
+        id: string;
+        label: string;
+        valueKey: keyof typeof pieChartData; // Link to your data keys
+        color: string;
+        isNested?: boolean;
+    }
+
+    const SNAPSHOT_CONFIG: RowConfig[] = [
+        { id: 'citizens', label: 'Singapore Citizens', valueKey: 'citizens', color: 'bg-emerald-500' },
+        { id: 'nonCitizens', label: 'Non-Citizens Total', valueKey: 'nonCitizens', color: 'bg-blue-500', isNested: false },
+        { id: 'pr', label: 'Permanent Residents', valueKey: 'permanentResidents', color: 'bg-indigo-500', isNested: true },
+        { id: 'work', label: 'Work Permit Holders', valueKey: 'workPermits', color: 'bg-indigo-500', isNested: true },
+        // ... add more as needed
+    ];
+
     return (
         <div className="w-full space-y-4">
             <div className="flex flex-wrap items-center gap-2 bg-muted/30 p-1.5 rounded-lg border border-slate-200 w-full">
@@ -135,9 +138,6 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                         </button>
                     ))}
                 </div>
-                {/* <div className="text-xs font-medium text-muted-foreground bg-white px-3 py-1.5 rounded-lg border shadow-xs">
-                    Snapshot Year: <span className="font-mono font-bold text-emerald-600">{pieChartData.snapshotYear}</span>
-                </div> */}
                 <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border shadow-xs">
                     <span className="text-xs font-bold text-slate-500">Year:</span>
                     <select
