@@ -28,6 +28,24 @@ interface PopulationExplorerProps {
 
 type ViewMode = 'line' | 'bar' | 'pie';
 
+interface RowConfig {
+    id: string;
+    label: string;
+    valueKey: string; // Or a union of your state keys
+    color: string;
+    isNested?: boolean; // Make it optional
+}
+
+const SNAPSHOT_CONFIG: RowConfig[] = [
+    { id: 'citizens', label: 'Singapore Citizens', valueKey: 'citizens', color: 'bg-emerald-500', isNested: false },
+    { id: 'nonCitizens', label: 'Non-Citizens Total', valueKey: 'nonCitizens', color: 'bg-blue-500', isNested: false },
+    { id: 'pr', label: 'Permanent Residents', valueKey: 'permanentResidents', color: 'bg-indigo-500', isNested: true },
+    { id: 'work', label: 'Work Permit Holders', valueKey: 'workPermits', color: 'bg-indigo-500', isNested: true },
+    { id: 'migrant', label: 'Migrant Domestic Workers', valueKey: 'migrantWorkers', color: 'bg-indigo-500', isNested: true },
+    { id: 'pass', label: 'Employment/S-Pass Holders', valueKey: 'passCount', color: 'bg-indigo-500', isNested: true },
+    { id: 'others', label: 'Long-Term/Students/Dependants', valueKey: 'others', color: 'bg-indigo-500', isNested: true },
+];
+
 export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: PopulationExplorerProps) {
     const [viewMode, setViewMode] = useState<ViewMode>('pie');
     const [yearScope, setYearScope] = useState<number>(10);
@@ -36,6 +54,11 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
     // Get all available years from the first metric
     const availableYears = useMemo(() => {
         return rawMetrics[0]?.history.map(h => h.year).sort((a, b) => b - a) || [];
+    }, [rawMetrics]);
+
+    const maxAvailableYears = useMemo(() => {
+        // Determine the number of years available in the first metric
+        return rawMetrics[0]?.history?.length || 10;
     }, [rawMetrics]);
 
     // Default to the most recent year
@@ -51,9 +74,9 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
     const spec = useMemo(() => ({
         widgetSpec: {
             height: "600px",
-            prompt: `**Objective:** Render chart data.\n **View Type:** ${viewMode}.\n **Data State:** Render context parsed dynamically: ${JSON.stringify(filteredMetrics)}.`
+            prompt: `**Objective:** Render chart data.\n **View Type:** ${viewMode}.\n **Data State:** Combined metrics: ${JSON.stringify([...filteredMetrics, ...breakdownMetrics])}.`
         }
-    }), [viewMode, filteredMetrics]);
+    }), [viewMode, filteredMetrics, breakdownMetrics]);
 
     // Update state if data changes
     useEffect(() => {
@@ -107,26 +130,10 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
         return `${((value / pieChartData.total) * 100).toFixed(1)}%`;
     };
 
-    // Define the structure of a row
-    interface RowConfig {
-        id: string;
-        label: string;
-        valueKey: keyof typeof pieChartData; // Link to your data keys
-        color: string;
-        isNested?: boolean;
-    }
-
-    const SNAPSHOT_CONFIG: RowConfig[] = [
-        { id: 'citizens', label: 'Singapore Citizens', valueKey: 'citizens', color: 'bg-emerald-500' },
-        { id: 'nonCitizens', label: 'Non-Citizens Total', valueKey: 'nonCitizens', color: 'bg-blue-500', isNested: false },
-        { id: 'pr', label: 'Permanent Residents', valueKey: 'permanentResidents', color: 'bg-indigo-500', isNested: true },
-        { id: 'work', label: 'Work Permit Holders', valueKey: 'workPermits', color: 'bg-indigo-500', isNested: true },
-        // ... add more as needed
-    ];
-
     return (
         <div className="w-full space-y-4">
             <div className="flex flex-wrap items-center gap-2 bg-muted/30 p-1.5 rounded-lg border border-slate-200 w-full">
+                {/* View Mode buttons */}
                 <div className="flex bg-white rounded-md border shadow-sm p-0.5">
                     {(['pie', 'bar', 'line'] as ViewMode[]).map((mode) => (
                         <button
@@ -138,6 +145,22 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                         </button>
                     ))}
                 </div>
+                {/* Slider visible only for line and bar */}
+                {viewMode !== 'pie' && (
+                    <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-lg border shadow-xs">
+                        <span className="text-xs font-bold text-slate-500">History:</span>
+                        <input
+                            type="range"
+                            min="2"
+                            max={maxAvailableYears} // This will now work correctly
+                            value={yearScope}
+                            onChange={(e) => setYearScope(Number(e.target.value))}
+                            className="w-24 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                        />
+                        <span className="text-[10px] font-mono font-bold text-slate-600">{yearScope} yrs</span>
+                    </div>
+                )}
+                {/* Year Selector (Always visible) */}
                 <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border shadow-xs">
                     <span className="text-xs font-bold text-slate-500">Year:</span>
                     <select
@@ -211,45 +234,20 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                             {/* 2. Nested Non-Citizen Content */}
                             {isNonCitizenExpanded && (
                                 <div className="pl-6 space-y-2 animate-fadeIn border-l-2 border-indigo-100 ml-4">
-
-                                    {/* Permanent Residents Row */}
-                                    <div className="flex items-center justify-between p-2 rounded-md bg-indigo-500/5 text-xs">
-                                        <span className="font-medium text-slate-700">Permanent Residents</span>
-                                        <div className="text-right">
-                                            <span className="font-mono font-bold">{pieChartData.permanentResidents.toLocaleString()}</span><br />
-                                            <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.permanentResidents)}</span>
+                                    {SNAPSHOT_CONFIG.filter(item => item.isNested).map((row) => (
+                                        <div key={row.id} className="flex items-center justify-between p-2 rounded-md bg-indigo-500/5 text-xs">
+                                            <span className="font-medium text-slate-700">{row.label}</span>
+                                            <div className="text-right">
+                                                <span className="font-mono font-bold">
+                                                    {(pieChartData as any)[row.valueKey].toLocaleString()}
+                                                </span>
+                                                <br />
+                                                <span className="text-xs text-indigo-700 font-bold">
+                                                    {getPercentage((pieChartData as any)[row.valueKey] as number)}
+                                                </span>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="flex items-center justify-between rounded-md bg-indigo-500/5 text-xs">
-                                        <span className="font-medium text-slate-700">Work Permit Holders</span>
-                                        <div className="text-right">
-                                            <span className="font-mono font-bold">{pieChartData.workPermits.toLocaleString()}</span><br />
-                                            <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.workPermits)}</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-between rounded-md bg-indigo-500/5 text-xs">
-                                        <span className="font-medium text-slate-700">Migrant Domestic Workers Permits</span>
-                                        <div className="text-right">
-                                            <span className="font-mono font-bold">{pieChartData.migrantWorkers.toLocaleString()}</span><br />
-                                            <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.migrantWorkers)}</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-between rounded-md bg-indigo-500/5 text-xs">
-                                        <span className="font-medium text-slate-700">Employment and S-Pass Holders</span>
-                                        <div className="text-right">
-                                            <span className="font-mono font-bold">{pieChartData.passCount.toLocaleString()}</span><br />
-                                            <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.passCount)}</span>
-                                        </div>
-
-                                    </div>
-                                    <div className="flex items-center justify-between rounded-md bg-indigo-500/5 text-xs">
-                                        <span className="font-medium text-slate-700">Long-Term, Dependants and Students</span>
-                                        <div className="text-right">
-                                            <span className="font-mono font-bold">{pieChartData.others.toLocaleString()}</span><br />
-                                            <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.others)}</span>
-                                        </div>
-                                    </div>
-
+                                    ))}
                                 </div>
                             )}
                         </div>

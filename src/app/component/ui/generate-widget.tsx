@@ -14,14 +14,38 @@ interface DataPoint { year: number; value: number; }
 interface MetricItem { name: string; unit: string; history: DataPoint[]; }
 
 export function GenerateWidget({ height = '600px', children, viewMode = 'line' }: GenerateWidgetProps) {
+    // STRICT FILTER: Only allow metrics with recognized names
+    const DISPLAY_ORDER = [
+        'Total Population',
+        'Singapore Citizen Population',
+        'Permanent Resident Population',
+        'Non-Resident Population',
+        'Work Permit Holders',
+        'S Pass Holders',
+        'Employment Pass Holders',
+        'Migrant Domestic Workers',
+        'Work Permit Holders',
+        'Long-Term Visit Pass Holders And Dependant\'s Pass Holders',
+        'Student Pass Holders'
+    ];
+
     const parsedData = useMemo(() => {
         try {
             const outerObj = JSON.parse(children);
             const promptText = outerObj.widgetSpec?.prompt || '';
-            const dataRegex = /context parsed dynamically:\s*(\[.*\])/;
+
+            const dataRegex = /Combined metrics:\s*(\[.*\])/;
             const match = promptText.match(dataRegex);
-            if (match && match[1]) return JSON.parse(match[1]) as MetricItem[];
-            return [] as MetricItem[];
+            if (match && match[1]) {
+                const allItems = JSON.parse(match[1]) as MetricItem[];
+                const raw = JSON.parse(match[1]) as MetricItem[];
+                return allItems
+                    // 1. Filter: Keep only those in your exact match whitelist
+                    .filter(item => DISPLAY_ORDER.includes(item.name))
+                    // 2. Sort: Order strictly by your array numbering
+                    .sort((a, b) => DISPLAY_ORDER.indexOf(a.name) - DISPLAY_ORDER.indexOf(b.name));
+            }
+            return [] as MetricItem[];;
         } catch (e) {
             console.error('Failed to parse data payload:', e);
             return [] as MetricItem[];

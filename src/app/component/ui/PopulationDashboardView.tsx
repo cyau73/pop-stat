@@ -84,6 +84,20 @@ export default function PopulationDashboardView({ data, breakdown }: PopulationD
         (latestStatsYear - 5).toString(), // Keeps your specific 2020 milestone interval
     ];
 
+    const ORDERED_INDICATORS = [
+        'Total Population',
+        'Singapore Citizen Population',
+        'Permanent Resident Population',
+        'Non-Resident Population'
+    ];
+    const sortedTableRows = useMemo(() => {
+        return [...tableRows]
+            .filter(row => ORDERED_INDICATORS.includes(row.name))
+            .sort((a, b) =>
+                ORDERED_INDICATORS.indexOf(a.name) - ORDERED_INDICATORS.indexOf(b.name)
+            );
+    }, [tableRows]);
+
     return (
         <div className="p-8 w-full mx-auto space-y-8">
             <div>
@@ -122,7 +136,7 @@ export default function PopulationDashboardView({ data, breakdown }: PopulationD
                             </tr>
                         </thead>
                         <tbody className="divide-y bg-background">
-                            {tableRows.map((row) => (
+                            {sortedTableRows.map((row) => (
                                 <tr key={row.id} className="hover:bg-muted/50 transition-colors">
                                     <td className="p-4 font-medium text-foreground max-w-xs md:max-w-md truncate">
                                         {row.name}
