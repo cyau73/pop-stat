@@ -1,7 +1,7 @@
 // src/app/component/ui/PopulationExplorer.tsx
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { GenerateWidget } from './generate-widget';
 import PopulationPieChart from './PopulationPieChart';
 
@@ -35,34 +35,54 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
 
     const maxAvailableYears = rawMetrics[0]?.history?.length || 20;
 
-    const filteredMetrics = rawMetrics.map(metric => ({
-        ...metric,
-        history: metric.history.slice(-yearScope)
-    }));
+    // Get all available years from the first metric
+    const availableYears = useMemo(() => {
+        return rawMetrics[0]?.history.map(h => h.year).sort((a, b) => b - a) || [];
+    }, [rawMetrics]);
+    // Default to the most recent year
+    const [selectedYear, setSelectedYear] = useState<number>(availableYears[0]);
 
-    const spec = {
-        widgetSpec: {
-            height: "600px",
-            prompt: `**Objective:** Render chart data.\n **View Type:** ${viewMode}.\n **Data State:** Render context parsed dynamically: ${JSON.stringify(filteredMetrics)}.`
+    // const filteredMetrics = rawMetrics.map(metric => ({
+    //     ...metric,
+    //     history: metric.history.slice(-yearScope)
+    // }));
+    // const spec = {
+    //     widgetSpec: {
+    //         height: "600px",
+    //         prompt: `**Objective:** Render chart data.\n **View Type:** ${viewMode}.\n **Data State:** Render context parsed dynamically: ${JSON.stringify(filteredMetrics)}.`
+    //     }
+    // };
+
+    // Update state if data changes
+    useEffect(() => {
+        if (availableYears.length > 0 && !selectedYear) {
+            setSelectedYear(availableYears[0]);
         }
-    };
+    }, [availableYears, selectedYear]);
 
     const pieChartData = useMemo(() => {
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth();
-        const targetYear = currentMonth >= 5 ? currentYear - 1 : currentYear - 2;
+        // const now = new Date();
+        // const currentYear = now.getFullYear();
+        // const currentMonth = now.getMonth();
+        // const targetYear = currentMonth >= 5 ? currentYear - 1 : currentYear - 2;
 
-        const history = rawMetrics[0]?.history || [];
-        const availableYears = history.map(h => h.year);
-        const snapshotYear = availableYears.includes(targetYear)
-            ? targetYear
-            : (availableYears.length > 0 ? Math.max(...availableYears) : currentYear);
+        // const history = rawMetrics[0]?.history || [];
+        // const availableYears = history.map(h => h.year);
+        // const snapshotYear = availableYears.includes(targetYear)
+        //     ? targetYear
+        //     : (availableYears.length > 0 ? Math.max(...availableYears) : currentYear);
+
+        const snapshotYear = selectedYear;
 
         const getValueForYear = (metrics: Metric[], nameMatch: string, year: number) => {
             const metric = metrics.find(m => m.name.toLowerCase() === nameMatch.toLowerCase());
             return metric?.history.find(h => h.year === year)?.value || 0;
         };
+
+        // const getValueForYear = (metrics: Metric[], nameMatch: string, year: number) => {
+        //     const metric = metrics.find(m => m.name.toLowerCase() === nameMatch.toLowerCase());
+        //     return metric?.history.find(h => h.year === year)?.value || 0;
+        // };
 
         // 1. Get raw counts
         const citizenCount = getValueForYear(rawMetrics, 'Singapore Citizen Population', snapshotYear);
@@ -94,7 +114,7 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
             others: others,
             snapshotYear
         };
-    }, [rawMetrics, breakdownMetrics]);
+    }, [rawMetrics, breakdownMetrics, selectedYear]);
 
     const getPercentage = (value: number) => {
         if (!pieChartData.total || pieChartData.total === 0) return '0.0%';
@@ -115,8 +135,20 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                         </button>
                     ))}
                 </div>
-                <div className="text-xs font-medium text-muted-foreground bg-white px-3 py-1.5 rounded-lg border shadow-xs">
+                {/* <div className="text-xs font-medium text-muted-foreground bg-white px-3 py-1.5 rounded-lg border shadow-xs">
                     Snapshot Year: <span className="font-mono font-bold text-emerald-600">{pieChartData.snapshotYear}</span>
+                </div> */}
+                <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border shadow-xs">
+                    <span className="text-xs font-bold text-slate-500">Year:</span>
+                    <select
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(Number(e.target.value))}
+                        className="text-xs font-mono font-bold text-emerald-600 bg-transparent border-none focus:ring-0 cursor-pointer"
+                    >
+                        {availableYears.map(year => (
+                            <option key={year} value={year}>{year}</option>
+                        ))}
+                    </select>
                 </div>
             </div>
 
