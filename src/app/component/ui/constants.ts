@@ -2,14 +2,21 @@
 export const DISPLAY_ORDER = [
     'Total Population',
     'Singapore Citizen Population',
+    'Non-Citizens Population',
     'Permanent Resident Population',
     'Non-Resident Population',
-    'Work Permit Holders',
-    'S Pass Holders',
     'Employment Pass Holders',
     'Migrant Domestic Workers',
+    'Work Permit Holders',
+    'S Pass Holders',
     'Long-Term Visit Pass Holders And Dependant\'s Pass Holders',
-    'Student Pass Holders'
+    'Student Pass Holders',
+    'Employment Pass Holders (Count)',
+    'Migrant Domestic Workers (Count)',
+    'Work Permit Holders (Count)',
+    'S Pass Holders (Count)',
+    'Long-Term Visit Pass Holders And Dependant\'s Pass Holders (Count)',
+    'Student Pass Holders (Count)',
 ];
 
 export const COLOR_MAP = {

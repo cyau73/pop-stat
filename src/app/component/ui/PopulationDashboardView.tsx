@@ -7,12 +7,6 @@ interface DataPoint {
     value: number | null;
 }
 
-interface Metric {
-    name: string;
-    unit: string;
-    history: Array<{ year: number; value: number }>;
-}
-
 interface IndicatorWithData {
     id: string;
     name: string;

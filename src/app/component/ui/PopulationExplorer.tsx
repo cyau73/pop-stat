@@ -37,10 +37,38 @@ const SNAPSHOT_CONFIG: RowConfig[] = [
     { id: 'others', label: 'Long-Term/Students/Dependants', valueKey: 'others', color: COLOR_MAP.others, isNested: true },
 ];
 
+interface DataPoint {
+    key: string;
+    value: string | number;
+}
+
+// This helper takes your raw percentages and the non-resident reference data
+// Place this inside PopulationExplorer.tsx
+const calculateAbsoluteMetric = (
+    name: string,
+    percentHistory: { year: number; value: number }[],
+    nrData: { year: number; value: number }[]
+): Metric => {
+    // Create a map for fast lookup of Non-Resident counts by year
+    const nrMap = new Map(nrData.map(pt => [pt.year, pt.value]));
+
+    return {
+        name,
+        unit: 'Number',
+        history: percentHistory.map(pt => {
+            const nonResidentCount = nrMap.get(pt.year) || 0;
+            return {
+                year: pt.year,
+                value: Math.round(pt.value * (nonResidentCount / 100))
+            };
+        })
+    };
+};
+
 export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: PopulationExplorerProps) {
     const [viewMode, setViewMode] = useState<ViewMode>('pie');
     const [selectedMetricIndex, setSelectedMetricIndex] = useState<number>(0);
-    const [yearScope, setYearScope] = useState<number>(10);
+    const [yearScope, setYearScope] = useState<number>(20);
     const [isNonCitizenExpanded, setIsNonCitizenExpanded] = useState<boolean>(false);
 
     // Get all available years from the first metric
@@ -56,23 +84,112 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
     // Default to the most recent year
     const [selectedYear, setSelectedYear] = useState<number>(availableYears[0]);
 
+    // const filteredMetrics = useMemo(() => {
+    //     // 1. Helper to find a specific metric's history
+    //     const getHistory = (metrics: Metric[], name: string) =>
+    //         metrics.find(m => m.name === name)?.history || [];
+
+    //     const prData = getHistory(rawMetrics, 'Permanent Resident Population');
+    //     const nrData = getHistory(rawMetrics, 'Non-Resident Population');
+    //     const wpData = getHistory(breakdownMetrics, 'Work Permit Holders');
+
+    //     // 2. Calculate Non-Citizen Total (PR + Non-Residents)
+    //     const nonCitizenHistory = prData.map((pt, i) => ({
+    //         year: pt.year,
+    //         value: pt.value + (nrData[i]?.value || 0)
+    //     }));
+
+    //     // 3. Calculate Work Permit Absolute Number (Percentage * Non-Residents)
+    //     const wpAbsoluteHistory = wpData.map((pt, i) => ({
+    //         year: pt.year,
+    //         value: Math.round(pt.value * ((nrData[i]?.value || 0) / 100))
+    //     }));
+
+    //     // 4. Construct NEW metric objects (avoid mutating original data)
+    //     const nonCitizenMetric: Metric = {
+    //         name: 'Non-Citizens Population',
+    //         unit: 'Number',
+    //         history: nonCitizenHistory
+    //     };
+
+    //     const wpAbsoluteMetric: Metric = {
+    //         name: 'Work Permit Holders',
+    //         unit: 'Number',
+    //         history: wpAbsoluteHistory
+    //     };
+
+    //     // 5. Combine everything
+    //     const allMetrics = [
+    //         ...rawMetrics.filter(m => m.name !== 'Work Permit Holders'), // Remove old one
+    //         ...breakdownMetrics.filter(m => m.name !== 'Work Permit Holders'),
+    //         nonCitizenMetric,
+    //         wpAbsoluteMetric
+    //     ];
+
+    //     // 6. Return the filtered, sliced, and sorted result
+    //     return allMetrics
+    //         .filter(metric => DISPLAY_ORDER.includes(metric.name))
+    //         .map(metric => ({ ...metric, history: metric.history.slice(-yearScope) }))
+    //         .sort((a, b) => DISPLAY_ORDER.indexOf(a.name) - DISPLAY_ORDER.indexOf(b.name));
+    // }, [rawMetrics, breakdownMetrics, yearScope]);
+
+    // 1. Ensure DataPoint interface is aligned with your history objects
+
+    interface DataPoint { year: number; value: number; }
+
     const filteredMetrics = useMemo(() => {
-        // Combine both sets and apply the same slice logic
-        const allMetrics = [...rawMetrics, ...breakdownMetrics];
-        const processed = allMetrics.map(m => ({ ...m, history: m.history.slice(-yearScope) }));
+        const nrData = rawMetrics.find(m => m.name === 'Non-Resident Population')?.history || [];
+        const prData = rawMetrics.find(m => m.name === 'Permanent Resident Population')?.history || [];
 
-        // DEBUG: Check if data is actually changing
-        console.log("Current Slider Scope:", yearScope);
-        console.log("Processed Data Sample:", processed.map(p => ({ name: p.name, points: p.history.length })));
+        // 1. Define how each Display Name is calculated
+        const getCalculatedMetric = (name: string): Metric | null => {
+            if (name === 'Non-Citizens Population') {
+                return {
+                    name,
+                    unit: 'People',
+                    history: prData.map((pt, i) => ({ year: pt.year, value: pt.value + (nrData[i]?.value || 0) }))
+                };
+            }
 
-        return allMetrics
-            .filter(metric => DISPLAY_ORDER.includes(metric.name)) // Use your whitelist
-            .map(metric => ({
-                ...metric,
-                history: metric.history.slice(-yearScope)
-            }))
-            .sort((a, b) => DISPLAY_ORDER.indexOf(a.name) - DISPLAY_ORDER.indexOf(b.name));
+            // Map names to their database counterparts
+            const sourceMap: Record<string, string[]> = {
+                'Employment Pass Holders (Count)': ['Employment Pass Holders'],
+                'Migrant Domestic Workers (Count)': ['Migrant Domestic Workers'],
+                'Work Permit Holders (Count)': ['Work Permit Holders'],
+                'S Pass Holders (Count)': ['S Pass Holders'],
+                'Long-Term Visit Pass Holders And Dependant\'s Pass Holders (Count)': ["Long-Term Visit Pass Holders And Dependant's Pass Holders"],
+                'Student Pass Holders (Count)': ['Student Pass Holders'],
+            };
+
+            const sources = sourceMap[name];
+            if (!sources) return null;
+
+            // Sum histories for the sources
+            const combinedHistory = sources.reduce((acc, sourceName) => {
+                const metric = breakdownMetrics.find(m => m.name === sourceName);
+                return acc.map((pt, i) => ({
+                    year: pt.year,
+                    value: pt.value + (metric?.history[i]?.value || 0)
+                }));
+            }, nrData.map(pt => ({ year: pt.year, value: 0 })));
+
+            return calculateAbsoluteMetric(name, combinedHistory, nrData);
+        };
+
+        // 2. Build the result by iterating over DISPLAY_ORDER
+        const allCalculated = DISPLAY_ORDER
+            .map(name => {
+                // If it's a raw metric, return it, otherwise try to calculate it
+                const raw = rawMetrics.find(m => m.name === name);
+                if (raw) return raw;
+                return getCalculatedMetric(name);
+            })
+            .filter((m): m is Metric => m !== null);
+
+        return allCalculated
+            .map(metric => ({ ...metric, history: metric.history.slice(-yearScope) }));
     }, [rawMetrics, breakdownMetrics, yearScope]);
+
 
     const spec = useMemo(() => ({
         widgetSpec: {
