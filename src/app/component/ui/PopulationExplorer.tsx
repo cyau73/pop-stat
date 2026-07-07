@@ -4,16 +4,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { GenerateWidget } from './generate-widget';
 import PopulationPieChart from './PopulationPieChart';
-
-const COLOR_MAP = {
-    citizens: 'bg-emerald-500',
-    nonCitizens: 'bg-blue-500',
-    workPermits: 'bg-amber-500',
-    employmentPass: 'bg-amber-400',
-    sPassHolders: 'bg-amber-300',
-    migrantWorkers: 'bg-amber-200',
-    others: 'bg-amber-100',
-};
+import { DISPLAY_ORDER, COLOR_MAP } from './constants';
 
 interface Metric {
     name: string;
@@ -37,17 +28,18 @@ interface RowConfig {
 }
 
 const SNAPSHOT_CONFIG: RowConfig[] = [
-    { id: 'citizens', label: 'Singapore Citizens', valueKey: 'citizens', color: 'bg-emerald-500', isNested: false },
-    { id: 'nonCitizens', label: 'Non-Citizens Total', valueKey: 'nonCitizens', color: 'bg-blue-500', isNested: false },
-    { id: 'pr', label: 'Permanent Residents', valueKey: 'permanentResidents', color: 'bg-indigo-500', isNested: true },
-    { id: 'work', label: 'Work Permit Holders', valueKey: 'workPermits', color: 'bg-indigo-500', isNested: true },
-    { id: 'migrant', label: 'Migrant Domestic Workers', valueKey: 'migrantWorkers', color: 'bg-indigo-500', isNested: true },
-    { id: 'pass', label: 'Employment/S-Pass Holders', valueKey: 'passCount', color: 'bg-indigo-500', isNested: true },
-    { id: 'others', label: 'Long-Term/Students/Dependants', valueKey: 'others', color: 'bg-indigo-500', isNested: true },
+    { id: 'citizens', label: 'Singapore Citizens', valueKey: 'citizens', color: COLOR_MAP.citizens, isNested: false },
+    { id: 'nonCitizens', label: 'Non-Citizens Total', valueKey: 'nonCitizens', color: COLOR_MAP.nonCitizens, isNested: false },
+    { id: 'pr', label: 'Permanent Residents', valueKey: 'permanentResidents', color: COLOR_MAP.workPermits, isNested: true },
+    { id: 'work', label: 'Work Permit Holders', valueKey: 'workPermits', color: COLOR_MAP.workPermits, isNested: true },
+    { id: 'migrant', label: 'Migrant Domestic Workers', valueKey: 'migrantWorkers', color: COLOR_MAP.migrantWorkers, isNested: true },
+    { id: 'pass', label: 'Employment/S-Pass Holders', valueKey: 'passCount', color: COLOR_MAP.employmentPass, isNested: true },
+    { id: 'others', label: 'Long-Term/Students/Dependants', valueKey: 'others', color: COLOR_MAP.others, isNested: true },
 ];
 
 export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: PopulationExplorerProps) {
     const [viewMode, setViewMode] = useState<ViewMode>('pie');
+    const [selectedMetricIndex, setSelectedMetricIndex] = useState<number>(0);
     const [yearScope, setYearScope] = useState<number>(10);
     const [isNonCitizenExpanded, setIsNonCitizenExpanded] = useState<boolean>(false);
 
@@ -65,18 +57,30 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
     const [selectedYear, setSelectedYear] = useState<number>(availableYears[0]);
 
     const filteredMetrics = useMemo(() => {
-        return rawMetrics.map(metric => ({
-            ...metric,
-            history: metric.history.slice(-yearScope)
-        }));
-    }, [rawMetrics, yearScope]);
+        // Combine both sets and apply the same slice logic
+        const allMetrics = [...rawMetrics, ...breakdownMetrics];
+        const processed = allMetrics.map(m => ({ ...m, history: m.history.slice(-yearScope) }));
+
+        // DEBUG: Check if data is actually changing
+        console.log("Current Slider Scope:", yearScope);
+        console.log("Processed Data Sample:", processed.map(p => ({ name: p.name, points: p.history.length })));
+
+        return allMetrics
+            .filter(metric => DISPLAY_ORDER.includes(metric.name)) // Use your whitelist
+            .map(metric => ({
+                ...metric,
+                history: metric.history.slice(-yearScope)
+            }))
+            .sort((a, b) => DISPLAY_ORDER.indexOf(a.name) - DISPLAY_ORDER.indexOf(b.name));
+    }, [rawMetrics, breakdownMetrics, yearScope]);
 
     const spec = useMemo(() => ({
         widgetSpec: {
             height: "600px",
-            prompt: `**Objective:** Render chart data.\n **View Type:** ${viewMode}.\n **Data State:** Combined metrics: ${JSON.stringify([...filteredMetrics, ...breakdownMetrics])}.`
+            // Only pass filteredMetrics here. Do not include breakdownMetrics separately.
+            prompt: `**Objective:** Render chart data.\n **View Type:** ${viewMode}.\n **Data State:** Combined metrics: ${JSON.stringify(filteredMetrics)}.`
         }
-    }), [viewMode, filteredMetrics, breakdownMetrics]);
+    }), [viewMode, filteredMetrics]); // filteredMetrics is already sliced by yearScope
 
     // Update state if data changes
     useEffect(() => {
@@ -189,7 +193,13 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                             otherNonCitizenCount={pieChartData.others}
                         />
                     ) : (
-                        <GenerateWidget key={viewMode} height="520px" viewMode={viewMode}>
+                        <GenerateWidget
+                            key={`widget-${viewMode}-${selectedMetricIndex}-${yearScope}`} // Added yearScope to the key
+                            height="520px"
+                            viewMode={viewMode}
+                            selectedIndex={selectedMetricIndex}
+                            onSelect={setSelectedMetricIndex}
+                        >
                             {JSON.stringify(spec)}
                         </GenerateWidget>
                     )}

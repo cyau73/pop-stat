@@ -2,32 +2,26 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { DISPLAY_ORDER } from './constants';
 
 interface GenerateWidgetProps {
     height?: string;
     children: string;
     viewMode?: 'line' | 'bar'; // Tracks current graph presentation mode
+    selectedIndex: number; // New prop
+    onSelect: (index: number) => void; // New prop    
 }
 
 // ... interface constraints stay identical to your original engine configuration ...
 interface DataPoint { year: number; value: number; }
 interface MetricItem { name: string; unit: string; history: DataPoint[]; }
 
-export function GenerateWidget({ height = '600px', children, viewMode = 'line' }: GenerateWidgetProps) {
-    // STRICT FILTER: Only allow metrics with recognized names
-    const DISPLAY_ORDER = [
-        'Total Population',
-        'Singapore Citizen Population',
-        'Permanent Resident Population',
-        'Non-Resident Population',
-        'Work Permit Holders',
-        'S Pass Holders',
-        'Employment Pass Holders',
-        'Migrant Domestic Workers',
-        'Work Permit Holders',
-        'Long-Term Visit Pass Holders And Dependant\'s Pass Holders',
-        'Student Pass Holders'
-    ];
+export function GenerateWidget({ height = '600px', children, viewMode = 'line', selectedIndex, onSelect }: GenerateWidgetProps) {
+
+    const [hoveredPoint, setHoveredPoint] = useState<{ year: number; value: number; x: number; y: number } | null>(null);
+    const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const containerRef = useRef<HTMLDivElement | null>(null);
 
     const parsedData = useMemo(() => {
         try {
@@ -38,12 +32,13 @@ export function GenerateWidget({ height = '600px', children, viewMode = 'line' }
             const match = promptText.match(dataRegex);
             if (match && match[1]) {
                 const allItems = JSON.parse(match[1]) as MetricItem[];
-                const raw = JSON.parse(match[1]) as MetricItem[];
-                return allItems
-                    // 1. Filter: Keep only those in your exact match whitelist
+                // Create a unique list based on name
+                const uniqueItems = Array.from(new Map(allItems.map(item => [item.name, item])).values());
+
+                return uniqueItems
                     .filter(item => DISPLAY_ORDER.includes(item.name))
-                    // 2. Sort: Order strictly by your array numbering
                     .sort((a, b) => DISPLAY_ORDER.indexOf(a.name) - DISPLAY_ORDER.indexOf(b.name));
+
             }
             return [] as MetricItem[];;
         } catch (e) {
@@ -52,13 +47,7 @@ export function GenerateWidget({ height = '600px', children, viewMode = 'line' }
         }
     }, [children]);
 
-    const [selectedMetricIndex, setSelectedMetricIndex] = useState<number>(0);
-    const [hoveredPoint, setHoveredPoint] = useState<{ year: number; value: number; x: number; y: number } | null>(null);
-    const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const containerRef = useRef<HTMLDivElement | null>(null);
-
-    const activeMetric = parsedData[selectedMetricIndex];
+    const activeMetric = parsedData[selectedIndex];
     const padding = useMemo(() => ({ top: 40, right: 40, bottom: 40, left: 80 }), []);
 
     useEffect(() => {
@@ -76,8 +65,11 @@ export function GenerateWidget({ height = '600px', children, viewMode = 'line' }
     const chartMeta = useMemo(() => {
         if (!activeMetric || activeMetric.history.length === 0) return null;
         const data = activeMetric.history;
+
+        // Now this will correctly pick the min year from the sliced array (e.g., 2021)
         const years = data.map(d => d.year);
         const values = data.map(d => d.value);
+
         return {
             minYear: Math.min(...years),
             maxYear: Math.max(...years),
@@ -93,6 +85,9 @@ export function GenerateWidget({ height = '600px', children, viewMode = 'line' }
 
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
+
+        console.log("Drawing Metric:", activeMetric?.name);
+        console.log("Chart Scale:", chartMeta);
 
         const dpr = window.devicePixelRatio || 1;
         canvas.width = dimensions.width * dpr;
@@ -166,14 +161,6 @@ export function GenerateWidget({ height = '600px', children, viewMode = 'line' }
                     ctx.lineWidth = 1;
                     ctx.strokeRect(x, y, actualWidth, barHeight);
                 }
-
-                // ctx.fillStyle = '#3b82f6'; // Clean styling theme color (Blue)
-                // ctx.fillRect(x, y, barWidth, barHeight);
-
-                // // Add thin border to distinct vector boxes neatly
-                // ctx.strokeStyle = '#1d4ed8';
-                // ctx.lineWidth = 1;
-                // ctx.strokeRect(x, y, barWidth, barHeight);
             });
         }
         // DRAW CONFIGURATION B: Line Chart Layout Rendering
@@ -261,9 +248,9 @@ export function GenerateWidget({ height = '600px', children, viewMode = 'line' }
                         Selected Demographic Perspective
                     </label>
                     <select
-                        value={selectedMetricIndex}
+                        value={selectedIndex}
                         onChange={(e) => {
-                            setSelectedMetricIndex(Number(e.target.value));
+                            onSelect(Number(e.target.value));
                             setHoveredPoint(null);
                         }}
                         className="block w-full max-w-sm rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
@@ -277,7 +264,7 @@ export function GenerateWidget({ height = '600px', children, viewMode = 'line' }
                 <div className="text-left sm:text-right">
                     <span className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">Measurement Scope</span>
                     <span className="text-sm font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-md inline-block mt-1">
-                        {activeMetric.unit}
+                        {activeMetric?.unit || 'N/A'}
                     </span>
                 </div>
             </div>
