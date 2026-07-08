@@ -63,12 +63,12 @@ export function GenerateWidget({ height = '600px', children, viewMode = 'line', 
     }, []);
 
     const chartMeta = useMemo(() => {
-        if (!activeMetric || activeMetric.history.length === 0) return null;
+        if (!activeMetric || activeMetric.history?.length === 0) return null;
         const data = activeMetric.history;
 
         // Now this will correctly pick the min year from the sliced array (e.g., 2021)
-        const years = data.map(d => d.year);
-        const values = data.map(d => d.value);
+        const years = data?.map(d => d.year);
+        const values = data?.map(d => d.value);
 
         return {
             minYear: Math.min(...years),

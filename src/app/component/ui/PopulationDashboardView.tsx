@@ -1,22 +1,29 @@
 // src/app/component/PopulationDashboardView.tsx
-import { useMemo } from 'react';
-import PopulationExplorer from '@/app/component/ui/PopulationExplorer';
+'use client';
 
-interface DataPoint {
+import { useMemo, useState } from 'react';
+import PopulationExplorer from '@/app/component/ui/PopulationExplorer';
+import { COUNTRY_METADATA, COUNTRY_SIDEBAR_CONFIGS } from '@/app/component/ui/constants';
+
+interface DBDataPoint {
     timePeriod: string;
     value: number | null;
 }
 
-interface IndicatorWithData {
+interface DBIndicator {
     id: string;
     name: string;
     unit: string | null;
-    dataPoints: DataPoint[];
+    dataPoints: DBDataPoint[];
+}
+
+interface CountryData {
+    population: DBIndicator[];
+    breakdown: DBIndicator[];
 }
 
 interface PopulationDashboardViewProps {
-    data: IndicatorWithData[];
-    breakdown: IndicatorWithData[]; // Add this
+    countryDataMap: Record<string, CountryData>;
 }
 
 const safeNum = (val: any) => {
@@ -24,135 +31,87 @@ const safeNum = (val: any) => {
     return isNaN(parsed) ? 0 : parsed;
 };
 
-export default function PopulationDashboardView({ data, breakdown }: PopulationDashboardViewProps) {
-    console.log("CONTAINER - Breakdown Data:", breakdown);
-    // 1. Optimize data structure for the frontend widget mapping
-    const widgetData = useMemo(() => {
-        return data.map(ind => ({
-            name: ind.name,
-            unit: ind.unit,
-            history: ind.dataPoints
-                .map(dp => ({ year: parseInt(dp.timePeriod), value: safeNum(dp.value) }))
-                .sort((a, b) => a.year - b.year)
-        }));
-    }, [data]);
-
-    // 2. Map raw row arrays into dynamic historical lookup matrices
-    const tableRows = useMemo(() => {
-        return data.map(indicator => {
-            const lookup: Record<string, string> = {};
-            for (const dp of indicator.dataPoints) {
-                if (dp.value !== null && dp.value !== undefined) {
-                    lookup[dp.timePeriod] = safeNum(dp.value).toLocaleString();
-                }
-            }
-            return {
-                id: indicator.id,
-                name: indicator.name,
-                unit: indicator.unit,
-                values: lookup
-            };
-        });
-    }, [data]);
-
-    const breakdownData = useMemo(() => {
-        return breakdown.map(ind => ({
-            name: ind.name,
-            unit: ind.unit ?? 'percentage',
-            history: ind.dataPoints.map(dp => ({
-                year: parseInt(dp.timePeriod),
-                value: safeNum(dp.value)
+// Adapt data from Prisma naming rules to PopulationExplorer rules
+const adaptToExplorerMetrics = (dbIndicators: DBIndicator[]) => {
+    return dbIndicators.map(indicator => ({
+        name: indicator.name,
+        unit: indicator.unit,
+        history: (indicator.dataPoints || [])
+            .map(dp => ({
+                year: parseInt(dp.timePeriod, 10),
+                value: dp.value ?? 0
             }))
-        }));
-    }, [breakdown]);
+            .sort((a, b) => a.year - b.year) // Sort chronological
+    }));
+};
 
-    // 3. Dynamically compute target tracking years based on current date (with 1-year stats lag)
-    const currentYear = new Date().getFullYear(); // 2026
-    const latestStatsYear = currentYear - 1;       // 2025
+export default function PopulationDashboardView({ countryDataMap }: { countryDataMap: Record<string, any> }) {
+    const availableCountries = Object.keys(countryDataMap);
+    // Track multiple selected countries for comparison
+    const [selectedCountries, setSelectedCountries] = useState<string[]>(['SG']);
 
-    // Generates: ['2025', '2024', '2023', '2020']
-    const TARGET_YEARS = [
-        latestStatsYear.toString(),
-        (latestStatsYear - 1).toString(),
-        (latestStatsYear - 2).toString(),
-        (latestStatsYear - 5).toString(), // Keeps your specific 2020 milestone interval
-    ];
-
-    const ORDERED_INDICATORS = [
-        'Total Population',
-        'Singapore Citizen Population',
-        'Permanent Resident Population',
-        'Non-Resident Population'
-    ];
-    const sortedTableRows = useMemo(() => {
-        return [...tableRows]
-            .filter(row => ORDERED_INDICATORS.includes(row.name))
-            .sort((a, b) =>
-                ORDERED_INDICATORS.indexOf(a.name) - ORDERED_INDICATORS.indexOf(b.name)
-            );
-    }, [tableRows]);
+    const toggleCountry = (code: string) => {
+        setSelectedCountries(prev =>
+            prev.includes(code)
+                ? prev.filter(c => c !== code) // Deselect
+                : [...prev, code]              // Add for side-by-side comparison
+        );
+    };
 
     return (
-        <div className="p-8 w-full mx-auto space-y-8">
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight">Singapore Population Overview</h1>
-                <p className="text-muted-foreground">
-                    Real-time insights powered by SingStat Table Builder API.
-                </p>
+        <div className="p-6 space-y-6 w-full max-w-7xl mx-auto">
+            <div className="flex justify-between items-center border-b pb-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Global Demographics</h1>
+                    <p className="text-sm text-slate-500">Compare multi-country population dynamics side-by-side</p>
+                </div>
+
+                {/* Multi-Select Country Badges */}
+                <div className="flex gap-2 bg-slate-100 p-1 rounded-lg border">
+                    {availableCountries.map((code) => (
+                        <button
+                            key={code}
+                            onClick={() => toggleCountry(code)}
+                            className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${selectedCountries.includes(code)
+                                ? 'bg-white text-slate-900 shadow-xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                        >
+                            {code === 'SG' ? 'Singapore' : code === 'MY' ? 'Malaysia' : code}
+                        </button>
+                    ))}
+                </div>
             </div>
 
-            {/* Interactive Visual Studio Section */}
-            <section className="bg-card rounded-xl border p-6 shadow-sm">
-                <h2 className="text-xl font-semibold mb-4">Historical Data Explorer</h2>
-                <p className="text-sm text-muted-foreground mb-6">
-                    Toggle different metrics using the interactive sandbox below to chart demographic trends over time.
-                </p>
+            {/* Dynamic Flex Grid to output components side-by-side */}
+            <div className={`grid gap-6 grid-cols-1 ${selectedCountries.length > 1 ? 'lg:grid-cols-2' : ''}`}>
+                {selectedCountries.map((code) => {
+                    const countryData = countryDataMap[code];
+                    if (!countryData) return null;
 
-                <PopulationExplorer
-                    rawMetrics={widgetData}
-                    breakdownMetrics={breakdownData}
-                />
+                    // Dynamically map properties to compatible structures
+                    const rawMetrics = adaptToExplorerMetrics(countryData.population);
+                    const breakdownMetrics = adaptToExplorerMetrics(countryData.breakdown);
 
-            </section>
+                    // Get the config or provide an empty fallback list
+                    const sidebarConfig = COUNTRY_SIDEBAR_CONFIGS[code] || [];
 
-            {/* Main Snapshot Table */}
-            <section className="space-y-4">
-                <h2 className="text-xl font-semibold">Latest Snapshot Table</h2>
-                <div className="overflow-x-auto rounded-lg border">
-                    <table className="w-full text-sm text-left border-collapse">
-                        <thead className="bg-muted text-muted-foreground uppercase text-xs font-semibold tracking-wider border-b">
-                            <tr>
-                                <th className="p-4 font-medium">Indicator</th>
-                                <th className="p-4 font-medium">Unit</th>
-                                {TARGET_YEARS.map(year => (
-                                    <th key={year} className="p-4 font-medium text-right">{year}</th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y bg-background">
-                            {sortedTableRows.map((row) => (
-                                <tr key={row.id} className="hover:bg-muted/50 transition-colors">
-                                    <td className="p-4 font-medium text-foreground max-w-xs md:max-w-md truncate">
-                                        {row.name}
-                                    </td>
-                                    <td className="p-4 text-muted-foreground">
-                                        {row.unit ?? 'N/A'}
-                                    </td>
-                                    {TARGET_YEARS.map((year, idx) => (
-                                        <td
-                                            key={year}
-                                            className={`p-4 text-right font-mono ${idx === 0 ? 'font-medium text-emerald-600' : ''
-                                                }`}
-                                        >
-                                            {row.values[year] || '—'}
-                                        </td>
-                                    ))}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+                    return (
+                        <div key={code} className="border p-4 rounded-2xl bg-slate-50/50 relative">
+                            <div className="absolute top-4 right-4 bg-slate-900 text-white text-[10px] uppercase font-black px-2 py-0.5 rounded tracking-wider z-10">
+                                {code} Engine
+                            </div>
+                            <PopulationExplorer
+                                countryCode={code as 'SG' | 'MY'}
+                                rawMetrics={rawMetrics}
+                                breakdownMetrics={breakdownMetrics}
+                                config={sidebarConfig}
+                                metadata={COUNTRY_METADATA[code]}
+                            />
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }

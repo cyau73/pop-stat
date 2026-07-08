@@ -12,44 +12,29 @@ interface Metric {
     history: Array<{ year: number; value: number }>;
 }
 
+interface RowConfig {
+    id: string;
+    label: string;
+    valueKey: string;
+    color: string;
+    isNested?: boolean;
+}
+
 interface PopulationExplorerProps {
+    countryCode: 'SG' | 'MY';
     rawMetrics: Metric[];
     breakdownMetrics: Metric[];
+    config: RowConfig[];
+    metadata: { label: string, hasNestedBreakdown: boolean };
 }
 
 type ViewMode = 'line' | 'bar' | 'pie';
 
-interface RowConfig {
-    id: string;
-    label: string;
-    valueKey: string; // Or a union of your state keys
-    color: string;
-    isNested?: boolean; // Make it optional
-}
-
-const SNAPSHOT_CONFIG: RowConfig[] = [
-    { id: 'citizens', label: 'Singapore Citizens', valueKey: 'citizens', color: COLOR_MAP.citizens, isNested: false },
-    { id: 'nonCitizens', label: 'Non-Citizens Total', valueKey: 'nonCitizens', color: COLOR_MAP.nonCitizens, isNested: false },
-    { id: 'pr', label: 'Permanent Residents', valueKey: 'permanentResidents', color: COLOR_MAP.workPermits, isNested: true },
-    { id: 'work', label: 'Work Permit Holders', valueKey: 'workPermits', color: COLOR_MAP.workPermits, isNested: true },
-    { id: 'migrant', label: 'Migrant Domestic Workers', valueKey: 'migrantWorkers', color: COLOR_MAP.migrantWorkers, isNested: true },
-    { id: 'pass', label: 'Employment/S-Pass Holders', valueKey: 'passCount', color: COLOR_MAP.employmentPass, isNested: true },
-    { id: 'others', label: 'Long-Term/Students/Dependants', valueKey: 'others', color: COLOR_MAP.others, isNested: true },
-];
-
-interface DataPoint {
-    key: string;
-    value: string | number;
-}
-
-// This helper takes your raw percentages and the non-resident reference data
-// Place this inside PopulationExplorer.tsx
 const calculateAbsoluteMetric = (
     name: string,
     percentHistory: { year: number; value: number }[],
     nrData: { year: number; value: number }[]
 ): Metric => {
-    // Create a map for fast lookup of Non-Resident counts by year
     const nrMap = new Map(nrData.map(pt => [pt.year, pt.value]));
 
     return {
@@ -65,83 +50,28 @@ const calculateAbsoluteMetric = (
     };
 };
 
-export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: PopulationExplorerProps) {
+export default function PopulationExplorer({ countryCode, rawMetrics, breakdownMetrics, config, metadata }: PopulationExplorerProps) {
     const [viewMode, setViewMode] = useState<ViewMode>('pie');
     const [selectedMetricIndex, setSelectedMetricIndex] = useState<number>(0);
     const [yearScope, setYearScope] = useState<number>(20);
     const [isNonCitizenExpanded, setIsNonCitizenExpanded] = useState<boolean>(false);
 
-    // Get all available years from the first metric
+    const { label, hasNestedBreakdown } = metadata;
+
     const availableYears = useMemo(() => {
-        return rawMetrics[0]?.history.map(h => h.year).sort((a, b) => b - a) || [];
+        return rawMetrics[0]?.history?.map(h => h.year).sort((a, b) => b - a) || [];
     }, [rawMetrics]);
 
     const maxAvailableYears = useMemo(() => {
-        // Determine the number of years available in the first metric
         return rawMetrics[0]?.history?.length || 10;
     }, [rawMetrics]);
 
-    // Default to the most recent year
     const [selectedYear, setSelectedYear] = useState<number>(availableYears[0]);
-
-    // const filteredMetrics = useMemo(() => {
-    //     // 1. Helper to find a specific metric's history
-    //     const getHistory = (metrics: Metric[], name: string) =>
-    //         metrics.find(m => m.name === name)?.history || [];
-
-    //     const prData = getHistory(rawMetrics, 'Permanent Resident Population');
-    //     const nrData = getHistory(rawMetrics, 'Non-Resident Population');
-    //     const wpData = getHistory(breakdownMetrics, 'Work Permit Holders');
-
-    //     // 2. Calculate Non-Citizen Total (PR + Non-Residents)
-    //     const nonCitizenHistory = prData.map((pt, i) => ({
-    //         year: pt.year,
-    //         value: pt.value + (nrData[i]?.value || 0)
-    //     }));
-
-    //     // 3. Calculate Work Permit Absolute Number (Percentage * Non-Residents)
-    //     const wpAbsoluteHistory = wpData.map((pt, i) => ({
-    //         year: pt.year,
-    //         value: Math.round(pt.value * ((nrData[i]?.value || 0) / 100))
-    //     }));
-
-    //     // 4. Construct NEW metric objects (avoid mutating original data)
-    //     const nonCitizenMetric: Metric = {
-    //         name: 'Non-Citizens Population',
-    //         unit: 'Number',
-    //         history: nonCitizenHistory
-    //     };
-
-    //     const wpAbsoluteMetric: Metric = {
-    //         name: 'Work Permit Holders',
-    //         unit: 'Number',
-    //         history: wpAbsoluteHistory
-    //     };
-
-    //     // 5. Combine everything
-    //     const allMetrics = [
-    //         ...rawMetrics.filter(m => m.name !== 'Work Permit Holders'), // Remove old one
-    //         ...breakdownMetrics.filter(m => m.name !== 'Work Permit Holders'),
-    //         nonCitizenMetric,
-    //         wpAbsoluteMetric
-    //     ];
-
-    //     // 6. Return the filtered, sliced, and sorted result
-    //     return allMetrics
-    //         .filter(metric => DISPLAY_ORDER.includes(metric.name))
-    //         .map(metric => ({ ...metric, history: metric.history.slice(-yearScope) }))
-    //         .sort((a, b) => DISPLAY_ORDER.indexOf(a.name) - DISPLAY_ORDER.indexOf(b.name));
-    // }, [rawMetrics, breakdownMetrics, yearScope]);
-
-    // 1. Ensure DataPoint interface is aligned with your history objects
-
-    interface DataPoint { year: number; value: number; }
 
     const filteredMetrics = useMemo(() => {
         const nrData = rawMetrics.find(m => m.name === 'Non-Resident Population')?.history || [];
         const prData = rawMetrics.find(m => m.name === 'Permanent Resident Population')?.history || [];
 
-        // 1. Define how each Display Name is calculated
         const getCalculatedMetric = (name: string): Metric | null => {
             if (name === 'Non-Citizens Population') {
                 return {
@@ -151,7 +81,6 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                 };
             }
 
-            // Map names to their database counterparts
             const sourceMap: Record<string, string[]> = {
                 'Employment Pass Holders (Count)': ['Employment Pass Holders'],
                 'Migrant Domestic Workers (Count)': ['Migrant Domestic Workers'],
@@ -164,7 +93,6 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
             const sources = sourceMap[name];
             if (!sources) return null;
 
-            // Sum histories for the sources
             const combinedHistory = sources.reduce((acc, sourceName) => {
                 const metric = breakdownMetrics.find(m => m.name === sourceName);
                 return acc.map((pt, i) => ({
@@ -176,10 +104,8 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
             return calculateAbsoluteMetric(name, combinedHistory, nrData);
         };
 
-        // 2. Build the result by iterating over DISPLAY_ORDER
         const allCalculated = DISPLAY_ORDER
             .map(name => {
-                // If it's a raw metric, return it, otherwise try to calculate it
                 const raw = rawMetrics.find(m => m.name === name);
                 if (raw) return raw;
                 return getCalculatedMetric(name);
@@ -187,19 +113,16 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
             .filter((m): m is Metric => m !== null);
 
         return allCalculated
-            .map(metric => ({ ...metric, history: metric.history.slice(-yearScope) }));
+            .map(metric => ({ ...metric, history: metric.history?.slice(-yearScope) }));
     }, [rawMetrics, breakdownMetrics, yearScope]);
-
 
     const spec = useMemo(() => ({
         widgetSpec: {
             height: "600px",
-            // Only pass filteredMetrics here. Do not include breakdownMetrics separately.
             prompt: `**Objective:** Render chart data.\n **View Type:** ${viewMode}.\n **Data State:** Combined metrics: ${JSON.stringify(filteredMetrics)}.`
         }
-    }), [viewMode, filteredMetrics]); // filteredMetrics is already sliced by yearScope
+    }), [viewMode, filteredMetrics]);
 
-    // Update state if data changes
     useEffect(() => {
         if (availableYears.length > 0 && !selectedYear) {
             setSelectedYear(availableYears[0]);
@@ -211,27 +134,30 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
 
         const getValueForYear = (metrics: Metric[], nameMatch: string, year: number) => {
             const metric = metrics.find(m => m.name.toLowerCase() === nameMatch.toLowerCase());
-            return metric?.history.find(h => h.year === year)?.value || 0;
+            return metric?.history?.find(h => h.year === year)?.value || 0;
         };
 
-        // 1. Get raw counts
-        const citizenCount = getValueForYear(rawMetrics, 'Singapore Citizen Population', snapshotYear);
-        const prCount = getValueForYear(rawMetrics, 'Permanent Resident Population', snapshotYear);
-        const nonResidentCount = getValueForYear(rawMetrics, 'Non-Resident Population', snapshotYear);
+        const citizenCount = hasNestedBreakdown
+            ? getValueForYear(rawMetrics, 'Singapore Citizen Population', snapshotYear)
+            : getValueForYear(rawMetrics, 'Citizen', snapshotYear);
 
-        // 2. Get breakdown percentages (database returns them as numbers like 25.5 for 25.5%)
-        const workPermitPct = getValueForYear(breakdownMetrics, 'Work Permit Holders', snapshotYear);
-        const sPassPct = getValueForYear(breakdownMetrics, 'S Pass Holders', snapshotYear);
-        const epPct = getValueForYear(breakdownMetrics, 'Employment Pass Holders', snapshotYear);
-        const migrantPct = getValueForYear(breakdownMetrics, 'Migrant Domestic Workers', snapshotYear);
-        const studentPct = getValueForYear(breakdownMetrics, 'Student Pass Holders', snapshotYear);
-        const ltvpPct = getValueForYear(breakdownMetrics, "Long-Term Visit Pass Holders And Dependant's Pass Holders", snapshotYear);
+        const nonResidentCount = hasNestedBreakdown
+            ? getValueForYear(rawMetrics, 'Non-Resident Population', snapshotYear)
+            : getValueForYear(rawMetrics, 'Non-Citizen', snapshotYear);
 
-        // 3. Calculate actual counts based on the non-resident population
-        const workPermits = Math.round((workPermitPct / 100) * nonResidentCount);
-        const passCount = Math.round(((sPassPct + epPct) / 100) * nonResidentCount);
-        const migrantWorkers = Math.round((migrantPct / 100) * nonResidentCount);
-        const others = Math.round(((studentPct + ltvpPct) / 100) * nonResidentCount);
+        const prCount = hasNestedBreakdown ? getValueForYear(rawMetrics, 'Permanent Resident Population', snapshotYear) : 0;
+
+        const workPermitPct = hasNestedBreakdown ? getValueForYear(breakdownMetrics, 'Work Permit Holders', snapshotYear) : 0;
+        const sPassPct = hasNestedBreakdown ? getValueForYear(breakdownMetrics, 'S Pass Holders', snapshotYear) : 0;
+        const epPct = hasNestedBreakdown ? getValueForYear(breakdownMetrics, 'Employment Pass Holders', snapshotYear) : 0;
+        const migrantPct = hasNestedBreakdown ? getValueForYear(breakdownMetrics, 'Migrant Domestic Workers', snapshotYear) : 0;
+        const studentPct = hasNestedBreakdown ? getValueForYear(breakdownMetrics, 'Student Pass Holders', snapshotYear) : 0;
+        const ltvpPct = hasNestedBreakdown ? getValueForYear(breakdownMetrics, "Long-Term Visit Pass Holders And Dependant's Pass Holders", snapshotYear) : 0;
+
+        const workPermits = hasNestedBreakdown ? Math.round((workPermitPct / 100) * nonResidentCount) : 0;
+        const passCount = hasNestedBreakdown ? Math.round(((sPassPct + epPct) / 100) * nonResidentCount) : 0;
+        const migrantWorkers = hasNestedBreakdown ? Math.round((migrantPct / 100) * nonResidentCount) : 0;
+        const others = hasNestedBreakdown ? Math.round(((studentPct + ltvpPct) / 100) * nonResidentCount) : 0;
 
         return {
             total: getValueForYear(rawMetrics, 'Total Population', snapshotYear),
@@ -254,7 +180,6 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
     return (
         <div className="w-full space-y-4">
             <div className="flex flex-wrap items-center gap-2 bg-muted/30 p-1.5 rounded-lg border border-slate-200 w-full">
-                {/* View Mode buttons */}
                 <div className="flex bg-white rounded-md border shadow-sm p-0.5">
                     {(['pie', 'bar', 'line'] as ViewMode[]).map((mode) => (
                         <button
@@ -266,14 +191,13 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                         </button>
                     ))}
                 </div>
-                {/* Slider visible only for line and bar */}
                 {viewMode !== 'pie' && (
                     <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-lg border shadow-xs">
                         <span className="text-xs font-bold text-slate-500">History:</span>
                         <input
                             type="range"
                             min="2"
-                            max={maxAvailableYears} // This will now work correctly
+                            max={maxAvailableYears}
                             value={yearScope}
                             onChange={(e) => setYearScope(Number(e.target.value))}
                             className="w-24 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
@@ -281,7 +205,6 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                         <span className="text-[10px] font-mono font-bold text-slate-600">{yearScope} yrs</span>
                     </div>
                 )}
-                {/* Year Selector (Always visible) */}
                 <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border shadow-xs">
                     <span className="text-xs font-bold text-slate-500">Year:</span>
                     <select
@@ -311,7 +234,7 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                         />
                     ) : (
                         <GenerateWidget
-                            key={`widget-${viewMode}-${selectedMetricIndex}-${yearScope}`} // Added yearScope to the key
+                            key={`widget-${viewMode}-${selectedMetricIndex}-${yearScope}`}
                             height="520px"
                             viewMode={viewMode}
                             selectedIndex={selectedMetricIndex}
@@ -322,16 +245,14 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                     )}
                 </div>
 
-                {/* Sidebar Context Legend Panel with Interactive Accordion Dropdown */}
-                < div className="border rounded-xl bg-white p-4 shadow-sm h-fit" >
+                <div className="border rounded-xl bg-white p-4 shadow-sm h-fit">
                     <h3 className="text-xs font-bold text-slate-900 border-b pb-2">Population Segment Profiles</h3>
 
                     <div className="space-y-2 font-sans text-sm">
-                        {/* Singapore Citizens Row */}
                         <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border">
                             <div className="flex items-center space-x-2.5">
                                 <div className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP.citizens} shrink-0`} />
-                                <span className="font-medium text-slate-700">Singapore Citizens</span>
+                                <span className="font-medium text-slate-700">{label} Citizens</span>
                             </div>
                             <div className="text-right">
                                 <span className="block font-bold text-slate-900">{pieChartData.citizens.toLocaleString()}</span>
@@ -339,34 +260,37 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                             </div>
                         </div>
 
-                        {/* 1. Non-Citizens Accordion (Top Level) */}
                         <div className="space-y-2 font-sans text-sm">
                             <div
-                                onClick={() => setIsNonCitizenExpanded(!isNonCitizenExpanded)}
-                                className="flex items-center justify-between p-2.5 rounded-lg bg-indigo-50 border border-indigo-200 cursor-pointer hover:bg-indigo-100 transition-all"
+                                onClick={() => hasNestedBreakdown && setIsNonCitizenExpanded(!isNonCitizenExpanded)}
+                                className={`flex items-center justify-between p-2.5 rounded-lg border transition-all ${hasNestedBreakdown ? 'bg-indigo-50 border-indigo-200 cursor-pointer hover:bg-indigo-100' : 'bg-slate-50 border-slate-200'
+                                    }`}
                             >
                                 <div className="flex items-center space-x-2.5">
-                                    <svg className={`w-3 h-3 text-indigo-600 transition-transform ${isNonCitizenExpanded ? 'rotate-90' : 'rotate-0'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                    </svg>
+                                    {hasNestedBreakdown && (
+                                        <svg className={`w-3 h-3 text-indigo-600 transition-transform ${isNonCitizenExpanded ? 'rotate-90' : 'rotate-0'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    )}
                                     <div className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP.nonCitizens} shrink-0`} />
-                                    <span className="font-semibold text-indigo-900">Non-Citizens Total</span>
+                                    <span className={`font-semibold ${hasNestedBreakdown ? 'text-indigo-900' : 'text-slate-700'}`}>Non-Citizens Total</span>
                                 </div>
                                 <div className="text-right">
-                                    <span className="block font-bold text-indigo-900">{pieChartData.nonCitizens.toLocaleString()}</span>
-                                    <span className="text-xs text-indigo-700 font-bold">{getPercentage(pieChartData.nonCitizens)}</span>
+                                    <span className={`block font-bold ${hasNestedBreakdown ? 'text-indigo-900' : 'text-slate-900'}`}>{pieChartData.nonCitizens.toLocaleString()}</span>
+                                    <span className={`text-xs font-bold ${hasNestedBreakdown ? 'text-indigo-700' : 'text-slate-500'}`}>{getPercentage(pieChartData.nonCitizens)}</span>
                                 </div>
                             </div>
 
                             {/* 2. Nested Non-Citizen Content */}
-                            {isNonCitizenExpanded && (
+                            {hasNestedBreakdown && isNonCitizenExpanded && config && (
                                 <div className="pl-6 space-y-2 animate-fadeIn border-l-2 border-indigo-100 ml-4">
-                                    {SNAPSHOT_CONFIG.filter(item => item.isNested).map((row) => (
+                                    {config.filter(item => item.isNested).map((row) => (
                                         <div key={row.id} className="flex items-center justify-between p-2 rounded-md bg-indigo-500/5 text-xs">
                                             <span className="font-medium text-slate-700">{row.label}</span>
                                             <div className="text-right">
                                                 <span className="font-mono font-bold">
-                                                    {(pieChartData as any)[row.valueKey].toLocaleString()}
+                                                    {/* Using optional chaining to safely access values for any country */}
+                                                    {(pieChartData as any)[row.valueKey]?.toLocaleString() || 0}
                                                 </span>
                                                 <br />
                                                 <span className="text-xs text-indigo-700 font-bold">
@@ -379,8 +303,8 @@ export default function PopulationExplorer({ rawMetrics, breakdownMetrics }: Pop
                             )}
                         </div>
                     </div>
-                </div >
-            </div >
-        </div >
+                </div>
+            </div>
+        </div>
     );
 }
