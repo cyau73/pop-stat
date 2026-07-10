@@ -69,10 +69,15 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
     const [selectedYear, setSelectedYear] = useState<number>(availableYears[0]);
 
     const filteredMetrics = useMemo(() => {
+        const orderList = DISPLAY_ORDER[countryCode] || [];
+
         const nrData = rawMetrics.find(m => m.name === 'Non-Resident Population')?.history || [];
         const prData = rawMetrics.find(m => m.name === 'Permanent Resident Population')?.history || [];
 
-        const getCalculatedMetric = (name: string): Metric | null => {
+        const getCalculatedMetric = (name: string, rawMetrics: Metric[], breakdownMetrics: Metric[]): Metric | null => {
+            const nrData = rawMetrics.find(m => m.name === 'Non-Resident Population')?.history || [];
+            const prData = rawMetrics.find(m => m.name === 'Permanent Resident Population')?.history || [];
+
             if (name === 'Non-Citizens Population') {
                 return {
                     name,
@@ -104,17 +109,20 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
             return calculateAbsoluteMetric(name, combinedHistory, nrData);
         };
 
-        const allCalculated = DISPLAY_ORDER
-            .map(name => {
-                const raw = rawMetrics.find(m => m.name === name);
-                if (raw) return raw;
-                return getCalculatedMetric(name);
-            })
+        // 1. Generate calculated metrics (like 'Non-Citizens Population')
+        const calculated = orderList
+            .map(name => getCalculatedMetric(name, rawMetrics, breakdownMetrics))
             .filter((m): m is Metric => m !== null);
 
-        return allCalculated
+        // 2. Combine all sources
+        const allMetrics = [...rawMetrics, ...breakdownMetrics, ...calculated];
+
+        // 3. Filter and Sort based on the orderList
+        return allMetrics
+            .filter(m => orderList.includes(m.name))
+            .sort((a, b) => orderList.indexOf(a.name) - orderList.indexOf(b.name))
             .map(metric => ({ ...metric, history: metric.history?.slice(-yearScope) }));
-    }, [rawMetrics, breakdownMetrics, yearScope]);
+    }, [rawMetrics, breakdownMetrics, yearScope, countryCode]);
 
     const spec = useMemo(() => ({
         widgetSpec: {
@@ -132,45 +140,49 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
     const pieChartData = useMemo(() => {
         const snapshotYear = selectedYear;
 
-        const getValueForYear = (metrics: Metric[], nameMatch: string, year: number) => {
-            const metric = metrics.find(m => m.name.toLowerCase() === nameMatch.toLowerCase());
-            return metric?.history?.find(h => h.year === year)?.value || 0;
+        const getValue = (name: string) => {
+            const metric = [...rawMetrics, ...breakdownMetrics].find(
+                m => m.name.toLowerCase() === name.toLowerCase()
+            );
+            return metric?.history?.find(h => h.year === snapshotYear)?.value || 0;
         };
 
-        const citizenCount = hasNestedBreakdown
-            ? getValueForYear(rawMetrics, 'Singapore Citizen Population', snapshotYear)
-            : getValueForYear(rawMetrics, 'Citizen', snapshotYear);
+        // Country-specific mappings
+        const isMY = countryCode === 'MY';
+        const hasNestedBreakdown = metadata.hasNestedBreakdown;
 
-        const nonResidentCount = hasNestedBreakdown
-            ? getValueForYear(rawMetrics, 'Non-Resident Population', snapshotYear)
-            : getValueForYear(rawMetrics, 'Non-Citizen', snapshotYear);
+        // 1. Fetch values
+        const totalRaw = getValue('Total Population');
+        const citizenCount = getValue(isMY ? 'Citizen' : 'Singapore Citizen Population');
+        const nonResident = getValue(isMY ? 'Non Citizen' : 'Non-Resident Population');
+        const prCount = isMY ? 0 : getValue('Permanent Resident Population');
 
-        const prCount = hasNestedBreakdown ? getValueForYear(rawMetrics, 'Permanent Resident Population', snapshotYear) : 0;
+        // 2. DEBUG: Log the values to see which one is 0
+        console.log('Calculation Debug:', { totalRaw, citizenCount, nonResident, prCount, isMY });
 
-        const workPermitPct = hasNestedBreakdown ? getValueForYear(breakdownMetrics, 'Work Permit Holders', snapshotYear) : 0;
-        const sPassPct = hasNestedBreakdown ? getValueForYear(breakdownMetrics, 'S Pass Holders', snapshotYear) : 0;
-        const epPct = hasNestedBreakdown ? getValueForYear(breakdownMetrics, 'Employment Pass Holders', snapshotYear) : 0;
-        const migrantPct = hasNestedBreakdown ? getValueForYear(breakdownMetrics, 'Migrant Domestic Workers', snapshotYear) : 0;
-        const studentPct = hasNestedBreakdown ? getValueForYear(breakdownMetrics, 'Student Pass Holders', snapshotYear) : 0;
-        const ltvpPct = hasNestedBreakdown ? getValueForYear(breakdownMetrics, "Long-Term Visit Pass Holders And Dependant's Pass Holders", snapshotYear) : 0;
+        // 3. Fallback logic: If Total is missing, sum the parts
+        const total = (citizenCount + nonResident + prCount);
 
-        const workPermits = hasNestedBreakdown ? Math.round((workPermitPct / 100) * nonResidentCount) : 0;
-        const passCount = hasNestedBreakdown ? Math.round(((sPassPct + epPct) / 100) * nonResidentCount) : 0;
-        const migrantWorkers = hasNestedBreakdown ? Math.round((migrantPct / 100) * nonResidentCount) : 0;
-        const others = hasNestedBreakdown ? Math.round(((studentPct + ltvpPct) / 100) * nonResidentCount) : 0;
+        // Breakdown lookups
+        const getBreakdown = (name: string) => hasNestedBreakdown ? getValue(name) : 0;
+
+        const workPermits = Math.round((getBreakdown('Work Permit Holders') / 100) * nonResident);
+        const passCount = Math.round(((getBreakdown('S Pass Holders') + getBreakdown('Employment Pass Holders')) / 100) * nonResident);
+        const migrantWorkers = Math.round((getBreakdown('Migrant Domestic Workers') / 100) * nonResident);
+        const others = Math.round(((getBreakdown('Student Pass Holders') + getBreakdown("Long-Term Visit Pass Holders And Dependant's Pass Holders")) / 100) * nonResident);
 
         return {
-            total: getValueForYear(rawMetrics, 'Total Population', snapshotYear),
+            total,
             citizens: citizenCount,
             permanentResidents: prCount,
-            nonCitizens: prCount + nonResidentCount,
-            workPermits: workPermits,
-            passCount: passCount,
-            migrantWorkers: migrantWorkers,
-            others: others,
+            nonCitizens: isMY ? nonResident : (prCount + nonResident),
+            workPermits,
+            passCount,
+            migrantWorkers,
+            others,
             snapshotYear
         };
-    }, [rawMetrics, breakdownMetrics, selectedYear]);
+    }, [rawMetrics, breakdownMetrics, selectedYear, countryCode, hasNestedBreakdown]);
 
     const getPercentage = (value: number) => {
         if (!pieChartData.total || pieChartData.total === 0) return '0.0%';
@@ -231,12 +243,14 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
                             passCount={pieChartData.passCount}
                             migrantCount={pieChartData.migrantWorkers}
                             otherNonCitizenCount={pieChartData.others}
+                            hasBreakdown={hasNestedBreakdown}
                         />
                     ) : (
                         <GenerateWidget
                             key={`widget-${viewMode}-${selectedMetricIndex}-${yearScope}`}
                             height="520px"
                             viewMode={viewMode}
+                            countryCode={countryCode}
                             selectedIndex={selectedMetricIndex}
                             onSelect={setSelectedMetricIndex}
                         >
@@ -305,6 +319,6 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

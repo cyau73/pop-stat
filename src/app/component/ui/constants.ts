@@ -1,23 +1,30 @@
 // src/app/component/ui/constants.ts
-export const DISPLAY_ORDER = [
-    'Total Population',
-    'Singapore Citizen Population',
-    'Non-Citizens Population',
-    'Non-Resident Population',
-    'Permanent Resident Population',
-    'Work Permit Holders',
-    'Migrant Domestic Workers',
-    'Employment Pass Holders',
-    'S Pass Holders',
-    'Long-Term Visit Pass Holders And Dependant\'s Pass Holders',
-    'Student Pass Holders',
-    'Work Permit Holders (Count)',
-    'Migrant Domestic Workers (Count)',
-    'Employment Pass Holders (Count)',
-    'S Pass Holders (Count)',
-    'Long-Term Visit Pass Holders And Dependant\'s Pass Holders (Count)',
-    'Student Pass Holders (Count)',
-];
+export const DISPLAY_ORDER: Record<string, string[]> = {
+    SG: [
+        'Total Population',
+        'Singapore Citizen Population',
+        'Non-Citizens Population',
+        'Non-Resident Population',
+        'Permanent Resident Population',
+        'Work Permit Holders',
+        'Migrant Domestic Workers',
+        'Employment Pass Holders',
+        'S Pass Holders',
+        'Long-Term Visit Pass Holders And Dependant\'s Pass Holders',
+        'Student Pass Holders',
+        'Work Permit Holders (Count)',
+        'Migrant Domestic Workers (Count)',
+        'Employment Pass Holders (Count)',
+        'S Pass Holders (Count)',
+        'Long-Term Visit Pass Holders And Dependant\'s Pass Holders (Count)',
+        'Student Pass Holders (Count)',
+    ],
+    MY: [
+        'Total Population',
+        'CITIZEN',
+        'NON CITIZEN',
+    ]
+}
 
 export const COLOR_MAP = {
     citizens: 'bg-emerald-500',
@@ -40,18 +47,17 @@ export const COUNTRY_SIDEBAR_CONFIGS: Record<string, any[]> = {
         { id: 'others', label: 'Long-Term/Students/Dependants', valueKey: 'others', color: COLOR_MAP.others, isNested: true },
     ],
     MY: [
-        { id: 'citizens', label: 'Malaysian Citizens', valueKey: 'citizens', color: COLOR_MAP.citizens, isNested: false },
-        { id: 'nonCitizens', label: 'Non-Citizens Total', valueKey: 'nonCitizens', color: COLOR_MAP.nonCitizens, isNested: false },
-    ]
+        { id: 'total', label: 'Total Population', valueKey: 'total', color: 'bg-slate-500', isNested: false },
+        { id: 'citizens', label: 'Malaysian Citizens', valueKey: 'citizens', color: 'bg-emerald-500', isNested: false },
+        { id: 'nonCitizens', label: 'Non-Citizens Total', valueKey: 'nonCitizens', color: 'bg-indigo-500', isNested: false },
+    ],
 };
 
 export const COUNTRY_CONFIGS = [
     { code: 'SG', mainPrefix: 'SG_M810001_', breakdownPrefix: 'SG_M810791' },
-    { code: 'MY', mainPrefix: 'MY_M_MAIN_', breakdownPrefix: 'MY_M_BREAKDOWN_' },
+    { code: 'MY', mainPrefix: 'MY_', breakdownPrefix: '' },
     { code: 'TH', mainPrefix: 'TH_M_MAIN_', breakdownPrefix: 'TH_M_BREAKDOWN_' }, // Easily add Thailand, etc.
 ];
-
-// src/app/component/PopulationDashboardView.tsx
 
 export const COUNTRY_METADATA: Record<string, { label: string, hasNestedBreakdown: boolean }> = {
     SG: { label: 'Singapore', hasNestedBreakdown: true },

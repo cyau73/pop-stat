@@ -3,20 +3,10 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { DISPLAY_ORDER } from './constants';
+import { MetricItem, GenerateWidgetProps, DataPoint } from '@/app/interfaces/db';
 
-interface GenerateWidgetProps {
-    height?: string;
-    children: string;
-    viewMode?: 'line' | 'bar'; // Tracks current graph presentation mode
-    selectedIndex: number; // New prop
-    onSelect: (index: number) => void; // New prop    
-}
 
-// ... interface constraints stay identical to your original engine configuration ...
-interface DataPoint { year: number; value: number; }
-interface MetricItem { name: string; unit: string; history: DataPoint[]; }
-
-export function GenerateWidget({ height = '600px', children, viewMode = 'line', selectedIndex, onSelect }: GenerateWidgetProps) {
+export function GenerateWidget({ height = '600px', children, viewMode = 'line', countryCode, selectedIndex, onSelect }: GenerateWidgetProps) {
 
     const [hoveredPoint, setHoveredPoint] = useState<{ year: number; value: number; x: number; y: number } | null>(null);
     const [dimensions, setDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
@@ -28,6 +18,8 @@ export function GenerateWidget({ height = '600px', children, viewMode = 'line', 
             const outerObj = JSON.parse(children);
             const promptText = outerObj.widgetSpec?.prompt || '';
 
+            const countryOrder = DISPLAY_ORDER[countryCode] || [];
+
             const dataRegex = /Combined metrics:\s*(\[.*\])/;
             const match = promptText.match(dataRegex);
             if (match && match[1]) {
@@ -36,8 +28,8 @@ export function GenerateWidget({ height = '600px', children, viewMode = 'line', 
                 const uniqueItems = Array.from(new Map(allItems.map(item => [item.name, item])).values());
 
                 return uniqueItems
-                    .filter(item => DISPLAY_ORDER.includes(item.name))
-                    .sort((a, b) => DISPLAY_ORDER.indexOf(a.name) - DISPLAY_ORDER.indexOf(b.name));
+                    .filter(item => countryOrder.includes(item.name))
+                    .sort((a, b) => countryOrder.indexOf(a.name) - countryOrder.indexOf(b.name));
 
             }
             return [] as MetricItem[];;
@@ -45,7 +37,7 @@ export function GenerateWidget({ height = '600px', children, viewMode = 'line', 
             console.error('Failed to parse data payload:', e);
             return [] as MetricItem[];
         }
-    }, [children]);
+    }, [children, countryCode]);
 
     const activeMetric = parsedData[selectedIndex];
     const padding = useMemo(() => ({ top: 40, right: 40, bottom: 40, left: 80 }), []);
@@ -277,10 +269,13 @@ export function GenerateWidget({ height = '600px', children, viewMode = 'line', 
                     className="w-full h-full cursor-crosshair block"
                 />
 
-                {hoveredPoint && (
+                {hoveredPoint && typeof hoveredPoint.y === 'number' && (
                     <div
                         className="absolute bg-slate-900/95 text-slate-50 text-xs rounded-lg p-2.5 shadow-xl border border-slate-800 pointer-events-none transform -translate-x-1/2 -translate-y-full font-sans space-y-0.5"
-                        style={{ left: hoveredPoint.x, top: hoveredPoint.y - 12 }}
+                        style={{
+                            left: hoveredPoint.x ?? 0,
+                            top: (hoveredPoint.y ?? 12) - 12
+                        }}
                     >
                         <div className="font-semibold text-slate-400">Year Milestone: {hoveredPoint.year}</div>
                         <div className="font-mono text-sm text-emerald-400 font-bold">

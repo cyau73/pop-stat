@@ -13,6 +13,7 @@ interface PopulationPieChartProps {
     passCount: number;
     migrantCount: number;
     otherNonCitizenCount: number;
+    hasBreakdown?: boolean;
 }
 
 export default function PopulationPieChart({
@@ -23,7 +24,8 @@ export default function PopulationPieChart({
     workPermitCount,
     passCount,
     migrantCount,
-    otherNonCitizenCount
+    otherNonCitizenCount,
+    hasBreakdown = true
 }: PopulationPieChartProps) {
     const [view, setView] = useState<'main' | 'breakdown'>('main');
 
@@ -31,6 +33,19 @@ export default function PopulationPieChart({
     console.log('PopulationPieChart Data:', {
         prCount, workPermitCount, passCount, migrantCount, otherNonCitizenCount
     });
+
+    const mainData = [
+        { name: 'Citizens', value: citizenCount, fill: '#059669' },
+        { name: 'Non-Citizens', value: nonCitizenCount, fill: '#3b82f6' }
+    ];
+
+    const breakdownData = [
+        { name: 'Permanent Residents', value: prCount, fill: '#60a5fa' },
+        { name: 'Work Permits', value: workPermitCount, fill: '#3b82f6' },
+        { name: 'Domestic Workers', value: migrantCount, fill: '#2563eb' },
+        { name: 'Employment & S Pass', value: passCount, fill: '#1d4ed8' },
+        { name: 'Others', value: otherNonCitizenCount, fill: '#1e3a8a' }
+    ].filter(d => d.value > 0);
 
     // Custom label renderer to place percentage inside slices
     const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, value }: any) => {
@@ -46,20 +61,10 @@ export default function PopulationPieChart({
         );
     };
 
-    const mainData = [
-        { name: 'Citizens', value: citizenCount, fill: '#059669' },
-        { name: 'Non-Citizens', value: nonCitizenCount, fill: '#3b82f6' }
-    ];
-
-    const breakdownData = [
-        { name: 'Permanent Residents', value: prCount, fill: '#60a5fa' },
-        { name: 'Work Permits', value: workPermitCount, fill: '#3b82f6' },
-        { name: 'Domestic Workers', value: migrantCount, fill: '#2563eb' },
-        { name: 'Employment & S Pass', value: passCount, fill: '#1d4ed8' },
-        { name: 'Long-Term, Dependants and Students', value: otherNonCitizenCount, fill: '#1e3a8a' }
-    ].filter(d => d.value > 0);
-
-    const activeData = view === 'main' ? mainData : breakdownData;
+    // If no breakdown data exists, force 'main' view
+    const activeData = (view === 'breakdown' && hasBreakdown && breakdownData.length > 0)
+        ? breakdownData
+        : mainData;
 
     return (
         <div className="w-full h-[400px] flex flex-col items-center">
@@ -83,9 +88,13 @@ export default function PopulationPieChart({
                         label={renderLabel}
                         labelLine={false}
                         onClick={(data) => {
-                            if (view === 'main' && data.name === 'Non-Citizens') setView('breakdown');
+                            // Only trigger drill-down if hasBreakdown is explicitly true
+                            if (hasBreakdown && view === 'main' && data.name === 'Non-Citizens') {
+                                setView('breakdown');
+                            }
                         }}
-                        style={{ cursor: 'pointer', outline: 'none' }}
+                        // Dynamically change cursor: only pointer if interactive
+                        style={{ cursor: hasBreakdown ? 'pointer' : 'default', outline: 'none' }}
                     >
                         {activeData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Pie>
