@@ -6,6 +6,8 @@ Breakdown of the non-citizen categories will be provided based on avaiablilty fr
 
 We will add more countries based on our availability to work on htis project. Any help will be greatly apprecaited.
 
-The code is based on data provided by SingStat https://www.singstat.gov.sg/
+The code is based on data provided by :
+1. SingStat https://www.singstat.gov.sg/
+2. OpenDOSM https://open.dosm.gov.my/data-catalogue/population_malaysia
 
 The dashboard is avilaable at https://pop-stat.vercel.app/
