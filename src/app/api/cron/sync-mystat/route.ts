@@ -1,10 +1,20 @@
 // app/api/cron/sync-dosm/route.ts
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export const maxDuration = 60;
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+    const { searchParams } = new URL(req.url);
+
+    // Parse years with defaults if necessary
+    const startYear = parseInt(searchParams.get('startYear') || '2020', 10);
+    const endYear = parseInt(searchParams.get('endYear') || '2025', 10);
+
+    if (isNaN(startYear) || isNaN(endYear)) {
+        return NextResponse.json({ error: 'Invalid year format' }, { status: 400 });
+    }
+
     try {
         // 1. Ensure Country exists
         const country = await prisma.country.upsert({
@@ -14,7 +24,8 @@ export async function GET() {
         });
 
         // 2. Fetch API Data with your confirmed URL
-        const url = 'https://api.data.gov.my/data-catalogue/?id=population_malaysia&filter=overall@age&date_start=2001-01-01@date&date_end=2025-01-01@date';
+        // Corrected construction with the required @date column reference
+        const url = `https://api.data.gov.my/data-catalogue/?id=population_malaysia&filter=overall@age&date_start=${startYear}-01-01@date&date_end=${endYear}-01-01@date`;
         const response = await fetch(url, { cache: 'no-store' });
 
         if (!response.ok) {
@@ -51,7 +62,7 @@ export async function GET() {
 
         // 5. Process and Upsert DataPoints
         const allOperations = [];
-        const startYear = new Date().getFullYear() - 20;
+        // const startYear = new Date().getFullYear() - 20;
 
         for (const [date, val] of Object.entries(grouped) as any) {
             const year = new Date(date).getFullYear();
