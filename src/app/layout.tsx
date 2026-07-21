@@ -6,7 +6,7 @@ import '@/app/global.css'; // Or your global Tailwind styles path
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-    title: 'Property Management & Population Dashboard',
+    title: 'Global Population Dashboard',
     description: 'Real-time demographic tracking system',
 };
 
