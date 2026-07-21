@@ -189,8 +189,11 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
         return `${((value / pieChartData.total) * 100).toFixed(1)}%`;
     };
 
+    const isSingleColumn = viewMode === 'pie';
+
     return (
         <div className="w-full space-y-4">
+            {/* Buttons */}
             <div className="flex flex-wrap items-center gap-2 bg-muted/30 p-1.5 rounded-lg border border-slate-200 w-full">
                 <div className="flex bg-white rounded-md border shadow-sm p-0.5">
                     {(['pie', 'bar', 'line'] as ViewMode[]).map((mode) => (
@@ -231,8 +234,10 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                <div className="xl:col-span-2 border rounded-xl bg-card shadow-sm min-h-[400px] flex items-center justify-center p-2 relative">
+            {/* Vertical Stack: Chart on top, Population Segment Profiles at the bottom */}
+            <div className="flex flex-col gap-4 w-full">
+                {/* Chart Area */}
+                <div className="w-full border rounded-xl bg-card shadow-sm min-h-[400px] flex items-center justify-center p-2 relative">
                     {viewMode === 'pie' ? (
                         <PopulationPieChart
                             totalPopulation={pieChartData.total}
@@ -259,10 +264,10 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
                     )}
                 </div>
 
-                <div className="border rounded-xl bg-white p-4 shadow-sm h-fit">
+                {/* Population Segment Profiles (Positioned at the bottom) */}
+                <div className="w-full border rounded-xl bg-white p-4 shadow-sm">
                     <h3 className="text-xs font-bold text-slate-900 border-b pb-2">Population Segment Profiles</h3>
-
-                    <div className="space-y-2 font-sans text-sm">
+                    <div className="space-y-2 font-sans text-sm mt-3">
                         <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 border">
                             <div className="flex items-center space-x-2.5">
                                 <div className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP.citizens} shrink-0`} />
@@ -277,8 +282,7 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
                         <div className="space-y-2 font-sans text-sm">
                             <div
                                 onClick={() => hasNestedBreakdown && setIsNonCitizenExpanded(!isNonCitizenExpanded)}
-                                className={`flex items-center justify-between p-2.5 rounded-lg border transition-all ${hasNestedBreakdown ? 'bg-indigo-50 border-indigo-200 cursor-pointer hover:bg-indigo-100' : 'bg-slate-50 border-slate-200'
-                                    }`}
+                                className={`flex items-center justify-between p-2.5 rounded-lg border transition-all ${hasNestedBreakdown ? 'bg-indigo-50 border-indigo-200 cursor-pointer hover:bg-indigo-100' : 'bg-slate-50 border-slate-200'}`}
                             >
                                 <div className="flex items-center space-x-2.5">
                                     {hasNestedBreakdown && (
@@ -295,7 +299,7 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
                                 </div>
                             </div>
 
-                            {/* 2. Nested Non-Citizen Content */}
+                            {/* Nested Non-Citizen Content */}
                             {hasNestedBreakdown && isNonCitizenExpanded && config && (
                                 <div className="pl-6 space-y-2 animate-fadeIn border-l-2 border-indigo-100 ml-4">
                                     {config.filter(item => item.isNested).map((row) => (
@@ -303,7 +307,6 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
                                             <span className="font-medium text-slate-700">{row.label}</span>
                                             <div className="text-right">
                                                 <span className="font-mono font-bold">
-                                                    {/* Using optional chaining to safely access values for any country */}
                                                     {(pieChartData as any)[row.valueKey]?.toLocaleString() || 0}
                                                 </span>
                                                 <br />
@@ -319,6 +322,6 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
                     </div>
                 </div>
             </div>
-        </div >
+        </div>
     );
 }
