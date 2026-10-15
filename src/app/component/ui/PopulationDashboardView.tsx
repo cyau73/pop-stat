@@ -7,39 +7,40 @@ import { COUNTRY_METADATA, COUNTRY_SIDEBAR_CONFIGS } from '@/app/component/ui/co
 import { DBIndicator } from '@/app/interfaces/db';
 
 // Centralized adapter that handles both SG and MY mapping logic
+// Centralized adapter that handles both SG and MY mapping logic
 const adaptToExplorerMetrics = (dbIndicators: DBIndicator[], countryCode: string) => {
-    // 1. Define the mapping rules as a nested record
     const keyMap: Record<string, Record<string, string>> = {
         'MY': {
             'CITIZEN': 'citizens',
             'NON CITIZEN': 'nonCitizens',
             'TOTAL POPULATION': 'total'
         },
-        'SG': {
-            // Add SG mappings here if needed
-        }
+        'SG': {}
     };
 
-    // We map indicators into the format the UI Sidebar expects
     const metrics = dbIndicators.map(indicator => {
         const normalizedName = indicator.name.toUpperCase();
-        // Normalize the key based on the name stored in the DB
         const mappedKey = keyMap[countryCode]?.[normalizedName] || indicator.name;
+
+        // Safely map and clean up data points, ensuring proper numeric coercion and sorting
+        const rawHistory = (indicator.dataPoints || [])
+            .map((dp: any) => ({
+                year: Number(dp.timePeriod),
+                value: Number(dp.value)
+            }))
+            .filter((pt: { year: number; value: number }) => !isNaN(pt.year) && !isNaN(pt.value));
+
+        // Sort strictly ascending by year
+        rawHistory.sort((a, b) => a.year - b.year);
 
         return {
             name: indicator.name,
             unit: indicator.unit,
             key: mappedKey,
-            history: (indicator.dataPoints || [])
-                .map((dp: any): { year: number; value: number } => ({
-                    year: parseInt(dp.timePeriod, 10),
-                    value: dp.value ?? 0
-                }))
-                .sort((a, b) => a.year - b.year)
+            history: rawHistory
         };
     });
 
-    // Inject 'total' for MY to prevent NaN issues
     if (countryCode === 'MY' && !metrics.some(m => m.key === 'total')) {
         const years = metrics[0]?.history.map(h => h.year) || [];
         const totalHistory = years.map(year => {
@@ -55,7 +56,7 @@ const adaptToExplorerMetrics = (dbIndicators: DBIndicator[], countryCode: string
             history: totalHistory
         });
     }
-    console.log("METRICS: ", metrics)
+
     return metrics;
 };
 
@@ -98,7 +99,7 @@ export default function PopulationDashboardView({ countryDataMap }: { countryDat
                 {selectedCountries.map((code) => {
                     const countryData = countryDataMap[code];
                     if (!countryData) return null;
-                    console.log("COUNTRY DATA: ", countryData);
+                    //console.log("COUNTRY DATA: ", countryData);
 
                     // Derive everything locally per-country
                     const config = COUNTRY_SIDEBAR_CONFIGS[code] || [];
@@ -107,9 +108,9 @@ export default function PopulationDashboardView({ countryDataMap }: { countryDat
                     const isMY = code === 'MY';
                     // Use the unified adapter
                     const rawMetrics = adaptToExplorerMetrics(countryData.population, code);
-                    console.log("RAW: ", rawMetrics);
+                    //console.log("RAW: ", rawMetrics);
                     const breakdownMetrics = isMY ? [] : adaptToExplorerMetrics(countryData.breakdown || [], code);
-                    console.log("BREAKDOWN: ", breakdownMetrics);
+                    //console.log("BREAKDOWN: ", breakdownMetrics);
 
                     return (
                         <div key={code} className="border p-4 rounded-2xl bg-slate-50/50 relative shadow-sm">

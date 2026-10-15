@@ -6,23 +6,24 @@ import { COUNTRY_CONFIGS } from '@/app/component/ui/constants';
 export const dynamic = 'force-dynamic';
 
 async function getIndicatorsByCodePrefix(prefix: string, countryCode: string) {
-    return await prisma.indicator.findMany({
+    const indicators = await prisma.indicator.findMany({
         where: {
             code: { startsWith: prefix },
             country: { code: countryCode }
         },
         include: {
             dataPoints: {
-                orderBy: { timePeriod: 'desc' }
+                orderBy: { timePeriod: 'asc' } // Explicitly order ascending so full history is returned in order
             }
         }
     });
+
+    return indicators;
 }
 
 export default async function PopulationDashboard() {
     const countryDataMap: Record<string, { population: any[]; breakdown: any[] }> = {};
 
-    // Fetch all countries concurrently in a loop
     await Promise.all(
         COUNTRY_CONFIGS.map(async (config) => {
             const [population, breakdown] = await Promise.all([
@@ -35,8 +36,6 @@ export default async function PopulationDashboard() {
             }
         })
     );
-
-    // console.log("SERVER SIDE - Breakdown Data count:", sgBreakdownData.length);
 
     if (Object.keys(countryDataMap).length === 0) {
         return (

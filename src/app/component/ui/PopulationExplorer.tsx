@@ -59,7 +59,9 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
     const { label, hasNestedBreakdown } = metadata;
 
     const availableYears = useMemo(() => {
-        return rawMetrics[0]?.history?.map(h => h.year).sort((a, b) => b - a) || [];
+        const years = rawMetrics[0]?.history?.map(h => h.year).sort((a, b) => b - a) || [];
+        console.log('Available Years:', years);
+        return years;
     }, [rawMetrics]);
 
     const maxAvailableYears = useMemo(() => {
@@ -68,108 +70,114 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
 
     const [selectedYear, setSelectedYear] = useState<number>(availableYears[0]);
 
-    const filteredMetrics = useMemo(() => {
-        const orderList = DISPLAY_ORDER[countryCode] || [];
-
-        const nrData = rawMetrics.find(m => m.name === 'Non-Resident Population')?.history || [];
-        const prData = rawMetrics.find(m => m.name === 'Permanent Resident Population')?.history || [];
-
-        const getCalculatedMetric = (name: string, rawMetrics: Metric[], breakdownMetrics: Metric[]): Metric | null => {
-            const nrData = rawMetrics.find(m => m.name === 'Non-Resident Population')?.history || [];
-            const prData = rawMetrics.find(m => m.name === 'Permanent Resident Population')?.history || [];
-
-            if (name === 'Non-Citizens Population') {
-                return {
-                    name,
-                    unit: 'People',
-                    history: prData.map((pt, i) => ({ year: pt.year, value: pt.value + (nrData[i]?.value || 0) }))
-                };
-            }
-
-            const sourceMap: Record<string, string[]> = {
-                'Employment Pass Holders (Count)': ['Employment Pass Holders'],
-                'Migrant Domestic Workers (Count)': ['Migrant Domestic Workers'],
-                'Work Permit Holders (Count)': ['Work Permit Holders'],
-                'S Pass Holders (Count)': ['S Pass Holders'],
-                'Long-Term Visit Pass Holders And Dependant\'s Pass Holders (Count)': ["Long-Term Visit Pass Holders And Dependant's Pass Holders"],
-                'Student Pass Holders (Count)': ['Student Pass Holders'],
-            };
-
-            const sources = sourceMap[name];
-            if (!sources) return null;
-
-            const combinedHistory = sources.reduce((acc, sourceName) => {
-                const metric = breakdownMetrics.find(m => m.name === sourceName);
-                return acc.map((pt, i) => ({
-                    year: pt.year,
-                    value: pt.value + (metric?.history[i]?.value || 0)
-                }));
-            }, nrData.map(pt => ({ year: pt.year, value: 0 })));
-
-            return calculateAbsoluteMetric(name, combinedHistory, nrData);
-        };
-
-        // 1. Generate calculated metrics (like 'Non-Citizens Population')
-        const calculated = orderList
-            .map(name => getCalculatedMetric(name, rawMetrics, breakdownMetrics))
-            .filter((m): m is Metric => m !== null);
-
-        // 2. Combine all sources
-        const allMetrics = [...rawMetrics, ...breakdownMetrics, ...calculated];
-
-        // 3. Filter and Sort based on the orderList
-        return allMetrics
-            .filter(m => orderList.includes(m.name))
-            .sort((a, b) => orderList.indexOf(a.name) - orderList.indexOf(b.name))
-            .map(metric => ({ ...metric, history: metric.history?.slice(-yearScope) }));
-    }, [rawMetrics, breakdownMetrics, yearScope, countryCode]);
-
-    const spec = useMemo(() => ({
-        widgetSpec: {
-            height: "600px",
-            prompt: `**Objective:** Render chart data.\n **View Type:** ${viewMode}.\n **Data State:** Combined metrics: ${JSON.stringify(filteredMetrics)}.`
-        }
-    }), [viewMode, filteredMetrics]);
-
     useEffect(() => {
-        if (availableYears.length > 0 && !selectedYear) {
+        if (availableYears.length > 0 && (!selectedYear || !availableYears.includes(selectedYear))) {
             setSelectedYear(availableYears[0]);
         }
     }, [availableYears, selectedYear]);
+
+    const normalizedBreakdownMetrics = useMemo(() => {
+        const allAvailableYears = rawMetrics[0]?.history?.map(h => h.year).sort((a, b) => a - b) || [];
+
+        return breakdownMetrics.map(metric => {
+            const historyMap = new Map(metric.history?.map(h => [h.year, h.value]) || []);
+
+            const fullHistory = allAvailableYears.map(year => {
+                // Use the exact database value if present; otherwise default to 0 (no extrapolation/forward-filling)
+                const value = historyMap.has(year) ? historyMap.get(year)! : 0;
+                return { year, value };
+            });
+
+            return {
+                ...metric,
+                history: fullHistory
+            };
+        });
+    }, [breakdownMetrics, rawMetrics]);
+
+    const filteredMetrics = useMemo(() => {
+        const orderList = DISPLAY_ORDER[countryCode] || [];
+        const allAvailableYears = rawMetrics[0]?.history?.map(h => h.year).sort((a, b) => a - b) || [];
+
+        const nrData = rawMetrics.find(m => m.name.toLowerCase().includes('non-resident'))?.history || [];
+        const prData = rawMetrics.find(m => m.name.toLowerCase().includes('permanent resident'))?.history || [];
+
+        const getCalculatedMetric = (name: string): Metric | null => {
+            const cleanName = name.toLowerCase().trim();
+
+            if (cleanName === 'non-citizens population') {
+                const nrMap = new Map(nrData.map(pt => [pt.year, pt.value]));
+                return {
+                    name,
+                    unit: 'People',
+                    history: allAvailableYears.map(year => {
+                        const prVal = prData.find(pt => pt.year === year)?.value || 0;
+                        const nrVal = nrMap.get(year) || 0;
+                        return { year, value: prVal + nrVal };
+                    })
+                };
+            }
+
+            const isCountMetric = cleanName.endsWith('(count)');
+            const baseName = isCountMetric ? cleanName.replace(' (count)', '').replace('(count)', '').trim() : cleanName;
+
+            // Use normalizedBreakdownMetrics here!
+            const sourceMetric = [...rawMetrics, ...normalizedBreakdownMetrics].find(m => {
+                const mName = m.name.toLowerCase().trim();
+                return mName === baseName || mName === cleanName;
+            });
+
+            if (!sourceMetric) return null;
+
+            if (isCountMetric) {
+                return calculateAbsoluteMetric(name, sourceMetric.history, nrData);
+            } else {
+                return {
+                    name: name,
+                    unit: sourceMetric.unit || '%',
+                    history: sourceMetric.history
+                };
+            }
+        };
+
+        return orderList
+            .map(name => getCalculatedMetric(name))
+            .filter((m): m is Metric => m !== null)
+            .map(metric => ({
+                ...metric,
+                history: [...(metric.history || [])].sort((a, b) => a.year - b.year).slice(-yearScope)
+            }));
+    }, [rawMetrics, normalizedBreakdownMetrics, yearScope, countryCode]);
 
     const pieChartData = useMemo(() => {
         const snapshotYear = selectedYear;
 
         const getValue = (name: string) => {
-            const metric = [...rawMetrics, ...breakdownMetrics].find(
-                m => m.name.toLowerCase() === name.toLowerCase()
+            const target = name.toLowerCase().trim();
+            // Use normalizedBreakdownMetrics here as well!
+            const metric = [...rawMetrics, ...normalizedBreakdownMetrics].find(
+                m => m.name.toLowerCase().trim() === target
             );
-            return metric?.history?.find(h => h.year === snapshotYear)?.value || 0;
+            const val = metric?.history?.find(h => h.year === snapshotYear)?.value || 0;
+            return val;
         };
 
-        // Country-specific mappings
         const isMY = countryCode === 'MY';
-        const hasNestedBreakdown = metadata.hasNestedBreakdown;
 
-        // 1. Fetch values
-        const totalRaw = getValue('Total Population');
         const citizenCount = getValue(isMY ? 'Citizen' : 'Singapore Citizen Population');
         const nonResident = getValue(isMY ? 'Non Citizen' : 'Non-Resident Population');
         const prCount = isMY ? 0 : getValue('Permanent Resident Population');
 
-        // 2. DEBUG: Log the values to see which one is 0
-        console.log('Calculation Debug:', { totalRaw, citizenCount, nonResident, prCount, isMY });
-
-        // 3. Fallback logic: If Total is missing, sum the parts
         const total = (citizenCount + nonResident + prCount);
 
-        // Breakdown lookups
         const getBreakdown = (name: string) => hasNestedBreakdown ? getValue(name) : 0;
 
         const workPermits = Math.round((getBreakdown('Work Permit Holders') / 100) * nonResident);
-        const passCount = Math.round(((getBreakdown('S Pass Holders') + getBreakdown('Employment Pass Holders')) / 100) * nonResident);
+        const sPassRaw = getValue('S Pass Holders');
+        const epPassRaw = getValue('Employment Pass Holders');
+        const passCount = Math.round(((sPassRaw + epPassRaw) / 100) * nonResident);
         const migrantWorkers = Math.round((getBreakdown('Migrant Domestic Workers') / 100) * nonResident);
-        const others = Math.round(((getBreakdown('Student Pass Holders') + getBreakdown("Long-Term Visit Pass Holders And Dependant's Pass Holders")) / 100) * nonResident);
+        const others = Math.round(((getBreakdown('Student Pass Holders') + getValue("Long-Term Visit Pass Holders And Dependant's Pass Holders")) / 100) * nonResident);
 
         return {
             total,
@@ -182,14 +190,19 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
             others,
             snapshotYear
         };
-    }, [rawMetrics, breakdownMetrics, selectedYear, countryCode, hasNestedBreakdown]);
+    }, [rawMetrics, normalizedBreakdownMetrics, selectedYear, countryCode, hasNestedBreakdown]);
+
+    const spec = useMemo(() => ({
+        widgetSpec: {
+            height: "600px",
+            prompt: `**Objective:** Render chart data.\n **View Type:** ${viewMode}.\n **Data State:** Combined metrics: ${JSON.stringify(filteredMetrics)}.`
+        }
+    }), [viewMode, filteredMetrics]);
 
     const getPercentage = (value: number) => {
         if (!pieChartData.total || pieChartData.total === 0) return '0.0%';
         return `${((value / pieChartData.total) * 100).toFixed(1)}%`;
     };
-
-    const isSingleColumn = viewMode === 'pie';
 
     return (
         <div className="w-full space-y-4">
@@ -224,7 +237,11 @@ export default function PopulationExplorer({ countryCode, rawMetrics, breakdownM
                     <span className="text-xs font-bold text-slate-500">Year:</span>
                     <select
                         value={selectedYear}
-                        onChange={(e) => setSelectedYear(Number(e.target.value))}
+                        onChange={(e) => {
+                            const val = Number(e.target.value);
+                            console.log('Year dropdown changed to:', val);
+                            setSelectedYear(val);
+                        }}
                         className="text-xs font-mono font-bold text-emerald-600 bg-transparent border-none focus:ring-0 cursor-pointer"
                     >
                         {availableYears.map(year => (
